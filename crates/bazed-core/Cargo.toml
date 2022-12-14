@@ -1,0 +1,16 @@
+[package]
+name = "bazed-core"
+version = "0.0.0"
+edition = "2021"
+authors.workspace = true
+categories.workspace = true
+keywords.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+ropey = "1.5.0"
+color-eyre.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
