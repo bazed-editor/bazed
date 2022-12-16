@@ -1,15 +1,25 @@
 <script lang="ts">
-    import PortionView from "./PortionView.svelte"
-    export let width: number = 1000;
-    export let height: number = 1000;
+    import Portion from "./Portion.svelte"
+    import kanagawa from "./kanagawa.js"
+    import type { Theme } from "./Theme"
+
+    export let width: number = 500;
+    export let height: number = 500;
+
+    export let theme: Theme = {
+        font: {
+            family: "monospace",
+            weight: "normal",
+            size: "20px",
+        },
+
+        font_color: kanagawa.fujiWhite,
+        primary_cursor_color: kanagawa.fujiWhite,
+        editor_background: kanagawa.sumiInk1,
+        line_height: 18,
+    }
 </script>
 
-<div class="rekuho" style="width: {width}px; height: {height}px">
-    <PortionView width={width} height={height} />
+<div class="rekuho" style:width={width}>
+  <Portion theme={theme} width={width} height={height} />
 </div>
-
-<style>
-    * {
-        font-family: monospace;
-    }
-</style>
