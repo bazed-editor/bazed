@@ -1,0 +1,16 @@
+semi: false
+tabWidth: 2
+useTabs: false
+singleQuote: false
+trailingComma: "all"
+printWidth: 100
+insertFinalNewline: true
+bracketSameLine: true
+singleAttributePerLine: true
+plugins:
+  - "prettier-plugin-svelte"
+pluginSearchDirs:
+  - "."
+overrides:
+  - files: "*.svelte"
+    options: { parser: "svelte" }
