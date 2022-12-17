@@ -16,7 +16,6 @@ license = "Apache-2.0 OR MIT"
 
 [workspace.dependencies]
 tracing = "0.1.37"
-tracing-subscriber = "0.3.16"
 
 color-eyre = { version = "0.6.2" }
 thiserror = "1.0.37"
@@ -24,13 +23,23 @@ thiserror = "1.0.37"
 serde_json = "1.0.89"
 serde = { version = "1.0.151", features = ["derive"] }
 uuid = { version = "1.2.2", features = ["v4", "serde"] }
-derive_more = "0.99.17"
+derive_more = { version = "0.99.17", features = ["into", "display"] }
 
-futures = "0.3.25"
+futures = { version = "0.3.25", default-features = false, features = ["std"] }
 tokio = { version = "1.23.0", features = ["rt", "net", "macros", "time", "sync"] }
 
 bazed-rpc = { path = "crates/bazed-rpc", version = "0.0.0" }
 bazed-core = { path = "crates/bazed-core", version = "0.0.0" }
+
+[workspace.dependencies.tracing-subscriber]
+version = "0.3.16"
+default-features = false
+features = [
+    "ansi",
+    "fmt",
+    "smallvec",
+    "std",
+]
 
 [profile.release]
 codegen-units = 1
