@@ -24,6 +24,21 @@ impl MarkedRope {
         }
     }
 
+    // TODO this should probably go
+    pub(crate) fn rope(&self) -> &Rope {
+        &self.rope
+    }
+
+    pub(crate) fn sticky_marker_at_start(&mut self) -> MarkerId {
+        let id = MarkerId::gen();
+        let marker = Marker {
+            char_index: 0,
+            kind: MarkerKind::Sticky,
+        };
+        self.markers.insert(id, marker);
+        id
+    }
+
     pub(crate) fn insert_char(&mut self, m: MarkerId, c: char) -> Result<(), Error> {
         let marker = self.get_marker(m)?;
         self.rope.insert_char(marker.char_index, c);
@@ -49,15 +64,18 @@ impl MarkedRope {
     }
 
     fn get_marker(&self, id: MarkerId) -> Result<Marker, Error> {
-        self.markers
-            .get(&id)
-            .map(|x| *x)
-            .ok_or_else(|| Error::UnknownMark(id))
+        self.markers.get(&id).copied().ok_or(Error::UnknownMark(id))
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
 pub struct MarkerId(Uuid);
+
+impl MarkerId {
+    fn gen() -> Self {
+        MarkerId(Uuid::new_v4())
+    }
+}
 
 impl std::fmt::Display for MarkerId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

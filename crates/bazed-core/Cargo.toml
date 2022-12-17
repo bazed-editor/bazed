@@ -14,3 +14,6 @@ ropey = "1.5.0"
 color-eyre.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
+bazed-rpc.workspace = true
+tokio.workspace = true
+futures.workspace = true
