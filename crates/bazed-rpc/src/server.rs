@@ -40,15 +40,17 @@ pub async fn wait_for_client(
                     match serde_json::from_str::<ToBackend>(&json) {
                         Ok(x) => {
                             if let Err(err) = to_backend_send.send(x).await {
-                                eprintln!("Stopping websocket receiver forwarding loop: {err}");
+                                tracing::warn!(
+                                    "Stopping websocket receiver forwarding loop: {err}"
+                                );
                                 break;
                             }
                         },
-                        Err(err) => eprintln!("Error parsing rpc message: {err:?}"),
+                        Err(err) => tracing::error!("Error parsing rpc message: {err:?}"),
                     }
                 },
-                Ok(other) => println!("Got unsupported websocket message: {other:?}"),
-                Err(err) => eprintln!("Got error message from websocket: {err:?}"),
+                Ok(other) => tracing::warn!("Got unsupported websocket message: {other:?}"),
+                Err(err) => tracing::error!("Got error message from websocket: {err:?}"),
             }
         }
     });
