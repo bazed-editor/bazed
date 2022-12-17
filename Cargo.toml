@@ -15,7 +15,10 @@ repository = "https://github.com/bazed-editor/bazed"
 license = "Apache-2.0 OR MIT"
 
 [workspace.dependencies]
-color-eyre = { version = "0.6.2", default-features = false }
+tracing = "0.1.37"
+tracing-subscriber = "0.3.16"
+
+color-eyre = { version = "0.6.2" }
 thiserror = "1.0.37"
 
 serde_json = "1.0.89"

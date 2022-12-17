@@ -14,6 +14,7 @@ pub struct App {
 }
 
 impl App {
+    #[tracing::instrument(skip(self))]
     async fn open_tmp(&mut self) -> Result<()> {
         let mut document = Document::open_tmp()?;
         let start_cursor = document.sticky_marker_at_start();
@@ -29,6 +30,7 @@ impl App {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn open_file(&mut self, path: std::path::PathBuf) -> Result<()> {
         let mut document = Document::open_file(path.clone())?;
         let start_cursor = document.sticky_marker_at_start();
@@ -44,7 +46,9 @@ impl App {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn handle_rpc_call(&mut self, call: ToBackend) -> Result<()> {
+        tracing::info!(call = ?call, "Handling rpc call");
         match call {
             ToBackend::KeyPressed(key) => {
                 if let Some(c) = key.key.try_into_char() {
@@ -61,7 +65,7 @@ impl App {
                 }
             },
             ToBackend::MouseInput { line, column } => {
-                println!("mouse input: {column},{line}")
+                tracing::info!("mouse input: {column},{line}")
             },
         }
         Ok(())
@@ -83,7 +87,7 @@ pub async fn start(addr: &str) -> Result<()> {
             while let Some(rpc_call) = recv.next().await {
                 let mut core = core.write().await;
                 if let Err(err) = core.handle_rpc_call(rpc_call).await {
-                    eprintln!("Failed to handle rpc call: {err:?}");
+                    tracing::error!("Failed to handle rpc call: {err:?}");
                 }
             }
         }

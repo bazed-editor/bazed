@@ -17,3 +17,5 @@ thiserror.workspace = true
 bazed-rpc.workspace = true
 tokio.workspace = true
 futures.workspace = true
+tracing.workspace = true
+
