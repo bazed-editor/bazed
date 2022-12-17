@@ -14,3 +14,6 @@ license.workspace = true
 bazed-core.workspace = true
 tokio.workspace = true
 color-eyre.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
