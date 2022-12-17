@@ -10,7 +10,7 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
-ropey = "1.5.0"
+xi-rope = "0.3.0"
 color-eyre.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
@@ -18,4 +18,5 @@ bazed-rpc.workspace = true
 tokio.workspace = true
 futures.workspace = true
 tracing.workspace = true
+derive_more.workspace = true
 
