@@ -1,3 +1,6 @@
+// Copyright (c) 2021 Tommaso Laurenzi
+// see https://github.com/rebelot/kanagawa.nvim for their beautiful theme!
+
 export default {
   // Bg Shades
   sumiInk0: "#16161D",
