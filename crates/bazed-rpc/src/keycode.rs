@@ -16,7 +16,7 @@ pub enum Modifier {
 }
 
 /// Any relevant letter, symbol of nav-key on a standard qwerty keyboard.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum Key {
     A,
     B,
@@ -95,7 +95,7 @@ pub enum Key {
 }
 
 impl Key {
-    pub fn try_into_char(self) -> Option<char> {
+    pub fn try_to_char(&self) -> Option<char> {
         Some(match self {
             Self::A => 'a',
             Self::B => 'b',

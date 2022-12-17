@@ -1,48 +1,40 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use bazed_rpc::{core_proto::ToBackend, core_proto::ToFrontend, server::ClientSendHandle};
 use color_eyre::Result;
 use futures::StreamExt;
 use tokio::sync::RwLock;
 
-use crate::{document::Document, marked_rope::MarkerId};
+use crate::document::{Document, DocumentId};
 
 pub struct App {
-    document: Option<Document>,
+    documents: HashMap<DocumentId, Document>,
+    active_document: Option<DocumentId>,
     event_send: ClientSendHandle,
-    cursors: Vec<MarkerId>,
 }
 
 impl App {
-    #[tracing::instrument(skip(self))]
-    async fn open_tmp(&mut self) -> Result<()> {
-        let mut document = Document::open_tmp()?;
-        let start_cursor = document.sticky_marker_at_start();
-        self.event_send
-            .send_rpc_notification(ToFrontend::Open {
-                id: document.id().0.to_owned(),
-                title: "<tmp>".to_string(),
-                text: document.content_to_string(),
-            })
-            .await?;
-        self.cursors.push(start_cursor);
-        self.document = Some(document);
-        Ok(())
+    pub fn new(event_send: ClientSendHandle) -> Self {
+        App {
+            documents: HashMap::new(),
+            active_document: None,
+            event_send,
+        }
     }
 
     #[tracing::instrument(skip(self))]
-    async fn open_file(&mut self, path: std::path::PathBuf) -> Result<()> {
-        let mut document = Document::open_file(path.clone())?;
-        let start_cursor = document.sticky_marker_at_start();
+    async fn open_ephemeral(&mut self) -> Result<()> {
+        let document = Document::open_ephemeral();
+        let id = DocumentId::gen();
         self.event_send
             .send_rpc_notification(ToFrontend::Open {
-                id: document.id().0.to_owned(),
-                title: path.display().to_string(),
-                text: document.content_to_string(),
+                id: id.0,
+                title: document.title.clone(),
+                text: document.buffer.content_to_string(),
             })
             .await?;
-        self.cursors.push(start_cursor);
-        self.document = Some(document);
+        self.documents.insert(id, document);
+        self.active_document = Some(id);
         Ok(())
     }
 
@@ -51,15 +43,15 @@ impl App {
         tracing::info!(call = ?call, "Handling rpc call");
         match call {
             ToBackend::KeyPressed(key) => {
-                if let Some(c) = key.key.try_into_char() {
-                    let Some(ref mut document) = self.document else { return Ok(()) };
-                    for cursor in &self.cursors {
-                        document.insert_char(*cursor, c)?;
-                    }
+                let Some(document_id) = self.active_document else { return Ok(()) };
+                let Some(ref mut document) = self.documents.get_mut(&document_id) else { return Ok(()) };
+
+                if let Some(c) = key.key.try_to_char() {
+                    document.buffer.insert_at_primary(&c.to_string());
                     self.event_send
                         .send_rpc_notification(ToFrontend::UpdateText {
-                            id: document.id().0.to_owned(),
-                            text: document.content_to_string(),
+                            id: document_id.0,
+                            text: document.buffer.content_to_string(),
                         })
                         .await?;
                 }
@@ -75,11 +67,7 @@ impl App {
 pub async fn start(addr: &str) -> Result<()> {
     let (send, mut recv) = bazed_rpc::server::wait_for_client(addr).await?;
 
-    let core = Arc::new(RwLock::new(App {
-        document: None,
-        event_send: send,
-        cursors: Vec::new(),
-    }));
+    let core = Arc::new(RwLock::new(App::new(send)));
 
     tokio::spawn({
         let core = core.clone();
@@ -93,7 +81,7 @@ pub async fn start(addr: &str) -> Result<()> {
         }
     });
 
-    core.write().await.open_tmp().await?;
+    core.write().await.open_ephemeral().await?;
 
     Ok(())
 }
