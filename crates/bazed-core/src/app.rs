@@ -55,14 +55,15 @@ impl App {
                 };
                 document.buffer.apply_buffer_op(operation);
                 self.event_send
-                    .send_rpc_notification(ToFrontend::UpdateText {
+                    .send_rpc_notification(ToFrontend::UpdateDocument {
                         id: document_id.0,
                         text: document.buffer.content_to_string(),
+                        carets: unimplemented!(),
                     })
                     .await?;
             },
-            ToBackend::MouseInput { line, column } => {
-                tracing::info!("mouse input: {column},{line}")
+            ToBackend::MouseInput(coords) => {
+                tracing::info!("mouse input: {coords:?}")
             },
         }
         Ok(())
