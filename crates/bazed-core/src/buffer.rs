@@ -99,6 +99,17 @@ impl Buffer {
             .map(|x| Position::from_offset(&self.text, x.offset))
     }
 
+    /// get the lines in the given inclusive range
+    pub fn lines_between(
+        &self,
+        low: usize,
+        high: usize,
+    ) -> impl Iterator<Item = std::borrow::Cow<str>> {
+        // TODO lines takes a range, so this is probably a very bad way of doing this...
+        // let's look into optimizing this.
+        self.text.lines(..).skip(low).take(high - low)
+    }
+
     #[tracing::instrument(skip(self))]
     fn commit_delta(&mut self, delta: RopeDelta) -> Rope {
         let head_rev = self.engine.get_head_rev_id();

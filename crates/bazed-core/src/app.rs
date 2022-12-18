@@ -72,8 +72,25 @@ impl App {
                 self.handle_key_pressed(ViewId::from_uuid(view_id), input)
                     .await?
             },
+
             ToBackend::MouseInput { view_id, position } => {
                 self.handle_mouse_input(ViewId::from_uuid(view_id), position)?
+            },
+            ToBackend::ViewportChanged {
+                view_id,
+                height,
+                width,
+                first_line,
+                first_col,
+            } => {
+                self.handle_viewport_changed(
+                    ViewId::from_uuid(view_id),
+                    height,
+                    width,
+                    first_line,
+                    first_col,
+                )
+                .await?;
             },
             ToBackend::ViewOpened {
                 request_id,
@@ -94,11 +111,41 @@ impl App {
         }
         Ok(())
     }
-    async fn handle_key_pressed(&mut self, view: ViewId, input: KeyInput) -> Result<()> {
+
+    async fn handle_viewport_changed(
+        &mut self,
+        view_id: ViewId,
+        height: usize,
+        width: usize,
+        first_line: usize,
+        first_col: usize,
+    ) -> Result<()> {
         let view = self
             .views
-            .get_mut(&view)
-            .ok_or(Error::InvalidViewId(view))?;
+            .get_mut(&view_id)
+            .ok_or(Error::InvalidViewId(view_id))?;
+        let needs_new_view_info = height > view.height || view.first_line != first_line;
+        view.width = width;
+        view.height = height;
+        view.first_line = first_line;
+        view.first_col = first_col;
+
+        if needs_new_view_info {
+            let document = self
+                .documents
+                .get(&view.document_id)
+                .ok_or(Error::InvalidDocumentId(view.document_id))?;
+            self.event_send
+                .send_rpc(document.create_update_notification(view_id, view))
+                .await?;
+        }
+        Ok(())
+    }
+    async fn handle_key_pressed(&mut self, view_id: ViewId, input: KeyInput) -> Result<()> {
+        let view = self
+            .views
+            .get_mut(&view_id)
+            .ok_or(Error::InvalidViewId(view_id))?;
         let document = self
             .documents
             .get_mut(&view.document_id)
@@ -109,9 +156,8 @@ impl App {
             return Ok(())
         };
         document.buffer.apply_buffer_op(operation);
-        // TODO updates should be linked to views, although possibly batched?
         self.event_send
-            .send_rpc(document.create_update_notification(view.document_id))
+            .send_rpc(document.create_update_notification(view_id, view))
             .await?;
         Ok(())
     }

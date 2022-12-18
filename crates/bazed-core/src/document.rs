@@ -3,7 +3,10 @@ use std::{io::Write, path::PathBuf};
 use bazed_rpc::core_proto::{CaretPosition, ToFrontend};
 use uuid::Uuid;
 
-use crate::buffer::Buffer;
+use crate::{
+    buffer::Buffer,
+    view::{View, ViewId},
+};
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash, derive_more::Display, derive_more::Into)]
 pub struct DocumentId(pub Uuid);
@@ -51,10 +54,19 @@ impl Document {
     /// damage tracking-style system that sends patches to the frontend.
     /// Additionally, this will later only send updates concerning
     /// the parts of the document that are currently visible / relevant in the frontend.
-    pub fn create_update_notification(&self, id: DocumentId) -> ToFrontend {
-        ToFrontend::UpdateDocument {
-            document_id: id.0,
-            text: self.buffer.content_to_string(),
+    pub fn create_update_notification(&self, view_id: ViewId, view: &View) -> ToFrontend {
+        let lines = self
+            .buffer
+            .lines_between(view.first_line, view.last_line())
+            .into_iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>();
+
+        ToFrontend::UpdateView {
+            view_id: view_id.into(),
+            first_line: view.first_line,
+            height: view.height,
+            text: lines,
             carets: self
                 .buffer
                 .all_carets()
