@@ -6,3 +6,4 @@ pub mod document;
 mod input_mapper;
 pub mod mark;
 mod user_buffer_op;
+pub mod view;

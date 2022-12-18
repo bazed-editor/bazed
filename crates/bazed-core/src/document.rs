@@ -7,9 +7,13 @@ use crate::buffer::Buffer;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash, derive_more::Display, derive_more::Into)]
 pub struct DocumentId(pub Uuid);
+
 impl DocumentId {
+    pub fn from_uuid(uuid: Uuid) -> Self {
+        Self(uuid)
+    }
     pub fn gen() -> DocumentId {
-        DocumentId(Uuid::new_v4())
+        Self(Uuid::new_v4())
     }
 }
 
@@ -49,7 +53,7 @@ impl Document {
     /// the parts of the document that are currently visible / relevant in the frontend.
     pub fn create_update_notification(&self, id: DocumentId) -> ToFrontend {
         ToFrontend::UpdateDocument {
-            id: id.0,
+            document_id: id.0,
             text: self.buffer.content_to_string(),
             carets: self
                 .buffer
