@@ -167,25 +167,82 @@ impl Buffer {
 
     pub(crate) fn apply_movement_op(&mut self, op: MovementOp) {
         for caret in self.regions.carets_mut() {
-            *caret = apply_movement_to_cursor(*caret, op, &self.text);
+            *caret = apply_movement_to_cursor(&self.text, *caret, op);
         }
     }
 }
 
-fn apply_movement_to_cursor(region: Region, op: MovementOp, text: &Rope) -> Region {
+fn apply_movement_to_cursor(text: &Rope, region: Region, op: MovementOp) -> Region {
     assert!(
         region.is_cursor(),
         "Movement for non-cursor regions is not implemented yet, and I'm not sure how to best approach this"
     );
+    let cursor_offset = region.start;
     let offset = match op {
         MovementOp::Left => text
-            .prev_grapheme_offset(region.start)
-            .unwrap_or(region.start),
+            .prev_grapheme_offset(cursor_offset)
+            .unwrap_or(cursor_offset),
         MovementOp::Right => text
-            .next_grapheme_offset(region.start)
-            .unwrap_or(region.start),
-        MovementOp::Up => unimplemented!("Vertical movement"),
-        MovementOp::Down => unimplemented!("Vertical movement"),
+            .next_grapheme_offset(cursor_offset)
+            .unwrap_or(cursor_offset),
+        MovementOp::Up => {
+            let cursor_pos = CursorPosition::from_offset(text, cursor_offset);
+            if cursor_pos.line > 0 {
+                cursor_pos.with_line(cursor_pos.line - 1).to_offset(text)
+            } else {
+                cursor_offset
+            }
+        },
+        MovementOp::Down => {
+            let cursor_pos = CursorPosition::from_offset(text, cursor_offset);
+            let last_line = text.line_of_offset(text.len());
+            if cursor_pos.line < last_line {
+                cursor_pos.with_line(cursor_pos.line + 1).to_offset(text)
+            } else {
+                cursor_offset
+            }
+        },
     };
     Region::cursor(offset)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CursorPosition {
+    line: usize,
+    col: usize,
+}
+
+impl CursorPosition {
+    fn from_offset(text: &Rope, offset: usize) -> Self {
+        let line = text.line_of_offset(offset);
+        let col = offset - text.offset_of_line(line);
+        CursorPosition { line, col }
+    }
+    /// Turn a position into an offset at that point,
+    /// snapping to the end of the line if the cursors column is further than the line is long.
+    fn to_offset(&self, text: &Rope) -> usize {
+        let line_offset = text.offset_of_line(self.line);
+        let next_line_offset = text.offset_of_line(self.line + 1);
+        // TODO does that unwrap_or make sense?
+        let naive_offset = text
+            .prev_grapheme_offset(line_offset + self.col + 1)
+            .unwrap_or(text.len());
+
+        // restrict naive_offset to at max be the end of the given line
+        let actual_offset = if naive_offset >= next_line_offset {
+            text.prev_grapheme_offset(next_line_offset)
+                .unwrap_or(naive_offset)
+        } else {
+            naive_offset
+        };
+        actual_offset
+    }
+
+    pub fn with_line(self, line: usize) -> Self {
+        Self { line, ..self }
+    }
+
+    pub fn with_col(self, col: usize) -> Self {
+        Self { col, ..self }
+    }
 }
