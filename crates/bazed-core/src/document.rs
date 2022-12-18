@@ -1,3 +1,4 @@
+use bazed_rpc::core_proto::{ToFrontend, CaretPosition};
 use uuid::Uuid;
 
 use crate::buffer::Buffer;
@@ -20,6 +21,21 @@ impl Document {
         Self {
             title: "<unnamed>".to_string(),
             buffer: Buffer::open_ephemeral(),
+        }
+    }
+
+    pub fn create_update_notification(&self, id: DocumentId) -> ToFrontend {
+        ToFrontend::UpdateDocument {
+            id: id.0,
+            text: self.buffer.content_to_string(),
+            carets: self
+                .buffer
+                .all_carets()
+                .map(|x| CaretPosition {
+                    line: x.line,
+                    col: x.col,
+                })
+                .into(),
         }
     }
 }
