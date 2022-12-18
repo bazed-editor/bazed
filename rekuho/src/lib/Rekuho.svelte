@@ -1,8 +1,6 @@
 <script
   lang="ts"
   context="module">
-  import kanagawa from "./kanagawa.js"
-  import type { Theme } from "./Theme"
 
   const websocket = async () => {
     try {
@@ -21,22 +19,18 @@
       console.log(e)
     }
   }
+</script>
+
+<script lang="ts">
+  import { example as exampleTheme } from "./Theme"
+  import Portion from "./Portion.svelte"
 
   export let width: number = 500
   export let height: number = 500
 
-  export let theme: Theme = {
-    font: {
-      family: "monospace",
-      weight: "normal",
-      size: "20px",
-    },
+  let theme = exampleTheme
 
-    gutter_background: kanagawa.sumiInk0,
-    font_color: kanagawa.fujiWhite,
-    primary_cursor_color: kanagawa.fujiWhite,
-    editor_background: kanagawa.sumiInk1,
-  }
+  websocket()
 </script>
 
 <div

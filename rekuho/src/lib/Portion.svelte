@@ -21,7 +21,6 @@
   let container: Element
 
   // TODO: Get proper input from backend
-  cursors.update((_) => [{ pos: [2, 1] }])
   lines.update((_) => [
     ...new Array(10).fill(""),
     ..."funky\nbanana\nt0wn".split("\n"),
@@ -62,7 +61,6 @@
     selection = pxToPortionPosition([ev.pageX, ev.pageY])
     cursorUpdate(0, selection)
     input.focus()
-    ev.preventDefault()
   }
 
   const mouseup = (ev: MouseEvent) => {
@@ -82,22 +80,11 @@
   // const drag = (ev : DragEvent) => {}
 
   const keydown = (ev: KeyboardEvent) => {
-    ev.preventDefault() // stops the textarea from filling up with input
-    switch (ev.key) {
-      case "h":
-        cursorMove(0, [-1, 0])
-        break
-      case "j":
-        cursorMove(0, [0, 1])
-        break
-      case "k":
-        cursorMove(0, [0, -1])
-        break
-      case "l":
-        cursorMove(0, [1, 0])
-        break
+    // TODO: Handle input from keydown events properly
+    if (ev.key.length === 1 && isAlpha(ev.key.charCodeAt(0))) {
+      insertAt(ev.key, $cursors[0].pos)
+      cursorMove(0, [1, 0])
     }
-    // TODO: Handle input from keydown events
   }
 
   const gutter_mousedown = (line: number, ev: MouseEvent) => {
@@ -120,7 +107,7 @@
     {#each $lines as _, i}
       <div
         class="gutter-cell"
-        on:mousedown={(e) => {
+        on:mousedown|preventDefault={(e) => {
           gutter_mousedown(i, e)
         }}
         style:font-size={theme.font.size}
@@ -147,9 +134,9 @@
     style:left="{gutter_width + theme.text_offset}px">
     <textarea
       bind:this={input}
-      wrap="off"
       tabindex="-1"
-      on:keydown={keydown}
+      wrap="off"
+      on:keydown|preventDefault={keydown}
       style:user-select="text"
       style:position="absolute"
       style:width="{column_width}px" />

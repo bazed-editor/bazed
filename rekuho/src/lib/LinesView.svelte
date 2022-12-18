@@ -16,7 +16,7 @@
   export const isAlpha = (code: number): boolean =>
     (code > 47 && code < 58) || (code > 64 && code < 91) || (code > 96 && code < 123)
 
-  // insert `text` into `self` at `offset`
+  // Insert `text` into `self` at `offset`
   // ```ts
   // splice("foo", 1, "here") => "fhereoo"
   // ```
@@ -25,13 +25,17 @@
     return self.substring(0, calculatedOffset) + text + self.substring(calculatedOffset)
   }
 
-  const modifyNth = <T>(list: T[], i: number, f: (_: T) => T): T[] => {
-    list[i] = f(list[i])
+  // Updates the element at `index` with `f` in `list`
+  // ```ts
+  // updateNth([1, 2, 3, 4], 3, n => n * n) => [1, 2, 9, 4]
+  // ```
+  const updateNth = <T>(list: T[], index: number, f: (element: T) => T): T[] => {
+    list[index] = f(list[index])
     return list
   }
 
   export const insertAt = (text: string, [x, y]: Vector2) =>
-    lines.update((lines: string[]) => modifyNth(lines, y, (line) => splice(line, x, text)))
+    lines.update((lines: string[]) => updateNth(lines, y, (line) => splice(line, x, text)))
 </script>
 
 <script lang="ts">

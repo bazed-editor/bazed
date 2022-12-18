@@ -10,7 +10,7 @@
 
   export type Position = Vector2
   export type Cursor = { pos: Vector2 }
-  export let cursors: Writable<Cursor[]> = writable([])
+  export let cursors: Writable<Cursor[]> = writable([{ id: 0, pos: [0, 0] }])
 
   export const cursorUpdate = (id: number, pos: [number | null, number | null]): void => {
     cursors.update((cursors) => {
@@ -42,19 +42,28 @@
   ]
 </script>
 
-<div
-  class="cursors-layer"
-  style:position="absolute"
-  style:top="0">
+<div class="cursors-layer">
   {#each $cursors as { pos }, i}
     {@const [x, y] = transformToScreenPosition(pos)}
     <div
+      class="cursor"
+      id="cursor-{i}"
       style:visibility
-      style:position="absolute"
-      style:width="5px"
+      style:width="{column_width}px"
       style:height="{line_height}px"
       style:background={theme.primary_cursor_color}
       style:left="{x}px"
       style:top="{y}px" />
   {/each}
 </div>
+
+<style>
+  .cursors-layer {
+    position: absolute;
+    top: 0;
+  }
+
+  .cursor {
+    position: absolute;
+  }
+</style>
