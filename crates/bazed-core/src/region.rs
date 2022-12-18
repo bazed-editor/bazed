@@ -10,7 +10,7 @@ impl RegionId {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, derive_more::Display)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, derive_more::Display, Default)]
 #[display(fmt = "{start}..{end}")]
 pub struct Region {
     start: usize,
@@ -39,6 +39,7 @@ impl Region {
     pub fn start(&self) -> usize {
         self.start
     }
+
     pub fn end(&self) -> usize {
         self.end
     }
