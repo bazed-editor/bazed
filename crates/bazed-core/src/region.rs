@@ -13,8 +13,8 @@ impl RegionId {
 #[derive(Debug, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, derive_more::Display, Default)]
 #[display(fmt = "{start}..{end}")]
 pub struct Region {
-    start: usize,
-    end: usize,
+    pub start: usize,
+    pub end: usize,
 }
 
 impl Region {
@@ -34,14 +34,6 @@ impl Region {
     ) {
         self.start = transformer.transform(self.start, after);
         self.end = transformer.transform(self.end, after);
-    }
-
-    pub fn start(&self) -> usize {
-        self.start
-    }
-
-    pub fn end(&self) -> usize {
-        self.end
     }
 
     /// A region is considered a cursor if its length is 0
