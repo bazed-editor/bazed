@@ -25,12 +25,17 @@ pub enum ToFrontend {
         path: Option<PathBuf>,
         text: String,
     },
-    UpdateDocument {
-        document_id: Uuid,
-        text: String,
+    /// Sent whenever anything in the view changed, i.e. the content,
+    /// the viewport, or a caret position
+    UpdateView {
+        view_id: Uuid,
+        first_line: usize,
+        height: usize,
+        text: Vec<String>,
+        /// caret positions are absolute
         carets: Vec<CaretPosition>,
     },
-
+    /// Response to the [ToBackend::ViewOpened] request
     ViewOpenedResponse {
         request_id: RequestId,
         view_id: Uuid,
@@ -44,13 +49,20 @@ pub enum ToBackend {
         view_id: Uuid,
         input: KeyInput,
     },
-
     /// Mouse was clicked. The coordinates are absolute.
     MouseInput {
         view_id: Uuid,
         position: CaretPosition,
     },
-
+    /// Send when the viewport for a given view has changed,
+    /// i.e. because the window was resized or the user scrolled.
+    ViewportChanged {
+        view_id: Uuid,
+        height: usize,
+        width: usize,
+        first_line: usize,
+        first_col: usize,
+    },
     ViewOpened {
         request_id: RequestId,
         document_id: Uuid,
