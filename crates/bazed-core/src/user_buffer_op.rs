@@ -3,6 +3,12 @@
 //! These will occur at the caret positions, and are thus only used for directly userfacing operations
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub(crate) enum BufferOp {
+    Edit(EditOp),
+    Movement(MovementOp),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub(crate) enum EditOp {
     Insert(String),
     Backspace,

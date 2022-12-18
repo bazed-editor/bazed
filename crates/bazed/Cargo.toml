@@ -15,5 +15,19 @@ bazed-core.workspace = true
 tokio.workspace = true
 color-eyre.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
+
+tracing-error = "0.2.0"
+
+[dependencies.tracing-subscriber]
+version = "0.3.16"
+default-features = false
+features = [
+    "ansi",
+    "fmt",
+    "smallvec",
+    "std",
+    "env-filter",
+    "registry",
+]
+
 
