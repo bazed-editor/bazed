@@ -108,8 +108,20 @@ impl App {
                     })
                     .await?;
             },
+            ToBackend::SaveDocument { document_id } => {
+                self.handle_save_document(DocumentId::from_uuid(document_id))
+                    .await?;
+            },
         }
         Ok(())
+    }
+
+    async fn handle_save_document(&mut self, document_id: DocumentId) -> Result<()> {
+        let document = self
+            .documents
+            .get_mut(&document_id)
+            .ok_or(Error::InvalidDocumentId(document_id))?;
+        Ok(document.write_to_file()?)
     }
 
     async fn handle_viewport_changed(
