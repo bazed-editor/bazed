@@ -1,13 +1,32 @@
 use serde::{Deserialize, Serialize};
 
 /// A combination of held [Modifier]s and a [Key].
-#[derive(Debug, Serialize, Deserialize)]
+// TODO figure out normalization: Do we get `Shift+a` or do we get `Key::Char('A')`?
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct KeyInput {
     pub modifiers: Vec<Modifier>,
     pub key: Key,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+impl KeyInput {
+    pub fn shift_held(&self) -> bool {
+        self.modifiers.contains(&Modifier::Shift)
+    }
+
+    pub fn ctrl_held(&self) -> bool {
+        self.modifiers.contains(&Modifier::Ctrl)
+    }
+    pub fn alt_held(&self) -> bool {
+        self.modifiers.contains(&Modifier::Alt)
+    }
+    pub fn win_held(&self) -> bool {
+        self.modifiers.contains(&Modifier::Win)
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Modifier {
     Ctrl,
     Alt,
@@ -17,44 +36,9 @@ pub enum Modifier {
 
 /// Any relevant letter, symbol of nav-key on a standard qwerty keyboard.
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Key {
-    A,
-    B,
-    C,
-    D,
-    E,
-    F,
-    G,
-    H,
-    I,
-    J,
-    K,
-    L,
-    M,
-    N,
-    O,
-    P,
-    Q,
-    R,
-    S,
-    T,
-    U,
-    V,
-    W,
-    X,
-    Y,
-    Z,
-    Tilde,
-    Num1,
-    Num2,
-    Num3,
-    Num4,
-    Num5,
-    Num6,
-    Num7,
-    Num8,
-    Num9,
-    Num0,
+    Char(char),
     F1,
     F2,
     F3,
@@ -67,20 +51,9 @@ pub enum Key {
     F10,
     F11,
     F12,
-    Minus,
-    Plus,
     Backspace,
-    Tab,
-    LBracket,
-    RBracket,
-    Backslash,
-    Semicolon,
-    Quote,
     Return,
-    Comma,
-    Period,
-    Slash,
-    Space,
+    Tab,
     Home,
     End,
     Insert,
@@ -95,35 +68,10 @@ pub enum Key {
 }
 
 impl Key {
-    pub fn try_to_char(&self) -> Option<char> {
-        Some(match self {
-            Self::A => 'a',
-            Self::B => 'b',
-            Self::C => 'c',
-            Self::D => 'd',
-            Self::E => 'e',
-            Self::F => 'f',
-            Self::G => 'g',
-            Self::H => 'h',
-            Self::I => 'i',
-            Self::J => 'j',
-            Self::K => 'k',
-            Self::L => 'l',
-            Self::M => 'm',
-            Self::N => 'n',
-            Self::O => 'o',
-            Self::P => 'p',
-            Self::Q => 'q',
-            Self::R => 'r',
-            Self::S => 's',
-            Self::T => 't',
-            Self::U => 'u',
-            Self::V => 'v',
-            Self::W => 'w',
-            Self::X => 'x',
-            Self::Y => 'y',
-            Self::Z => 'z',
-            _ => return None,
-        })
+    pub fn try_as_char(&self) -> Option<char> {
+        match self {
+            Self::Char(c) => Some(*c),
+            _ => None,
+        }
     }
 }

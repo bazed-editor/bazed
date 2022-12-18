@@ -10,10 +10,12 @@ pub struct ClientSendHandle(
 );
 
 impl ClientSendHandle {
+    #[tracing::instrument(skip(self))]
     pub async fn send_rpc_notification(
         &mut self,
         notification: ToFrontend,
     ) -> Result<(), tungstenite::Error> {
+        tracing::debug!("Sending rpc notification to client: {notification:?}");
         let json = serde_json::to_string(&notification).unwrap();
         self.0.send(tungstenite::Message::Text(json)).await
     }
