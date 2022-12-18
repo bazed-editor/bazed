@@ -6,8 +6,8 @@ use crate::keycode::KeyInput;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct CaretPosition {
-    line: usize,
-    column: usize,
+    pub line: usize,
+    pub col: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

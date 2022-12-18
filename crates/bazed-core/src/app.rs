@@ -55,11 +55,7 @@ impl App {
                 };
                 document.buffer.apply_buffer_op(operation);
                 self.event_send
-                    .send_rpc_notification(ToFrontend::UpdateDocument {
-                        id: document_id.0,
-                        text: document.buffer.content_to_string(),
-                        carets: unimplemented!(),
-                    })
+                    .send_rpc_notification(document.create_update_notification(document_id))
                     .await?;
             },
             ToBackend::MouseInput(coords) => {
