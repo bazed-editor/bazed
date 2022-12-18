@@ -45,6 +45,9 @@ pub enum ToFrontend {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "method", content = "params")]
 pub enum ToBackend {
+    SaveDocument {
+        document_id: Uuid,
+    },
     KeyPressed {
         view_id: Uuid,
         input: KeyInput,

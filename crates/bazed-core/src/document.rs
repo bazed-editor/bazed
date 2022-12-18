@@ -43,6 +43,8 @@ impl Document {
 
     /// Save the current buffer state to its path. Does nothing when no path is set.
     pub fn write_to_file(&self) -> std::io::Result<()> {
+        // TODO this should save a snapshot of the rope asynchronously,
+        // although idk on what layer that would be implemented
         let Some(ref path) = self.path else { return Ok(()) };
         let mut file = std::fs::File::options().write(true).open(path)?;
         file.write_all(self.buffer.content_to_string().as_bytes())
