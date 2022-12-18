@@ -5,7 +5,10 @@ use color_eyre::Result;
 use futures::StreamExt;
 use tokio::sync::RwLock;
 
-use crate::document::{Document, DocumentId};
+use crate::{
+    document::{Document, DocumentId},
+    input_mapper::interpret_key_input,
+};
 
 pub struct App {
     documents: HashMap<DocumentId, Document>,
@@ -46,15 +49,17 @@ impl App {
                 let Some(document_id) = self.active_document else { return Ok(()) };
                 let Some(ref mut document) = self.documents.get_mut(&document_id) else { return Ok(()) };
 
-                if let Some(c) = key.key.try_to_char() {
-                    document.buffer.insert_at_carets(&c.to_string());
-                    self.event_send
-                        .send_rpc_notification(ToFrontend::UpdateText {
-                            id: document_id.0,
-                            text: document.buffer.content_to_string(),
-                        })
-                        .await?;
-                }
+                let Some(operation) = interpret_key_input(&key) else {
+                    tracing::info!("Ignoring unhandled key input: {key:?}");
+                    return Ok(())
+                };
+                document.buffer.apply_buffer_op(operation);
+                self.event_send
+                    .send_rpc_notification(ToFrontend::UpdateText {
+                        id: document_id.0,
+                        text: document.buffer.content_to_string(),
+                    })
+                    .await?;
             },
             ToBackend::MouseInput { line, column } => {
                 tracing::info!("mouse input: {column},{line}")

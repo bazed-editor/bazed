@@ -6,7 +6,7 @@ use xi_rope::{engine::Engine, tree::NodeInfo, DeltaBuilder, Rope, RopeDelta, Tra
 
 use crate::{
     region::{Region, RegionId},
-    user_buffer_op::{EditOp, MovementOp},
+    user_buffer_op::{BufferOp, EditOp, MovementOp},
 };
 
 /// Stores all the active regions in a buffer.
@@ -39,7 +39,7 @@ impl Default for BufferRegions {
 impl BufferRegions {
     fn apply_transformer<N: NodeInfo>(&mut self, trans: &mut Transformer<N>) {
         for region in self.regions.values_mut() {
-            region.apply_transformer(trans, false);
+            region.apply_transformer(trans, true);
         }
     }
 
@@ -91,7 +91,7 @@ impl Buffer {
     }
 
     #[tracing::instrument(skip(self))]
-    pub fn commit_delta(&mut self, delta: RopeDelta) -> Rope {
+    fn commit_delta(&mut self, delta: RopeDelta) -> Rope {
         let head_rev = self.engine.get_head_rev_id();
         let undo_group = self.calculate_undo_group();
         //self.last_edit_type = self.this_edit_type;
@@ -113,7 +113,7 @@ impl Buffer {
         self.undo_group_id
     }
 
-    pub fn insert_at_carets(&mut self, chars: &str) {
+    fn insert_at_carets(&mut self, chars: &str) {
         // This is also where xi handles surrounding stuff in parens when something is selected.
         // i.e. when the text "foo" is in the selection, and the chars are "(",
         // then this would turn the text into "(foo)"
@@ -128,25 +128,32 @@ impl Buffer {
         self.commit_delta(delta);
     }
 
-    pub fn delete_backward_at_carets(&mut self) {
+    fn delete_backward_at_carets(&mut self) {
         let mut builder = DeltaBuilder::new(self.text.len());
         for region in self.regions.carets() {
             // See xi-editors `offset_for_delete_backwards` function in backward.rs...
             // all I'll say is `#[allow(clippy::cognitive_complexity)]`.
-            let delete_start = 0.max(region.start - 1);
+            let delete_start = 1.max(region.start) - 1;
             builder.delete(Region::new(delete_start, region.end));
         }
         let delta = builder.build();
         self.commit_delta(delta);
     }
 
-    pub fn undo(&mut self) {
+    fn undo(&mut self) {
         if self.undo_group_id > 1 {
             let mut undos = BTreeSet::new();
             undos.insert(self.undo_group_id);
             self.undo_group_id -= 1;
             self.engine.undo(undos);
             self.text = self.engine.get_head().clone();
+        }
+    }
+
+    pub(crate) fn apply_buffer_op(&mut self, op: BufferOp) {
+        match op {
+            BufferOp::Edit(x) => self.apply_edit_op(x),
+            BufferOp::Movement(x) => self.apply_movement_op(x),
         }
     }
 
