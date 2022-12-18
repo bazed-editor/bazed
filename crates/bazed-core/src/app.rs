@@ -47,7 +47,7 @@ impl App {
                 let Some(ref mut document) = self.documents.get_mut(&document_id) else { return Ok(()) };
 
                 if let Some(c) = key.key.try_to_char() {
-                    document.buffer.insert_at_primary(&c.to_string());
+                    document.buffer.insert_at_carets(&c.to_string());
                     self.event_send
                         .send_rpc_notification(ToFrontend::UpdateText {
                             id: document_id.0,

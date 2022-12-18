@@ -1,10 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use nonempty::{nonempty, NonEmpty};
 use tap::Pipe;
 use xi_rope::{engine::Engine, tree::NodeInfo, DeltaBuilder, Rope, RopeDelta, Transformer};
 
-use crate::region::{Region, RegionId};
+use crate::{
+    region::{Region, RegionId},
+    user_buffer_op::{EditOp, MovementOp},
+};
 
 /// Stores all the active regions in a buffer.
 ///
@@ -48,11 +51,20 @@ impl BufferRegions {
     fn carets(&self) -> NonEmpty<Region> {
         self.carets
             .iter()
-            .map(|x| self.regions.get(x).expect("caret not found in regions"))
-            .cloned()
+            .map(|x| *self.regions.get(x).expect("caret not found in regions"))
             .collect::<Vec<_>>()
             .pipe(NonEmpty::from_vec)
             .unwrap()
+    }
+
+    fn carets_mut(&mut self) -> impl Iterator<Item = &mut Region> {
+        // TODO This is stupid, but iterating over self.carets instead and getting the refs
+        // through get_mut doesn't work trivially, as rust can't verify that we won't get multiple
+        // mut refs to the same entry as a result of overlapping keys...
+        self.regions
+            .iter_mut()
+            .filter(|(k, _)| self.carets.contains(k))
+            .map(|(_, v)| v)
     }
 }
 
@@ -101,11 +113,7 @@ impl Buffer {
         self.undo_group_id
     }
 
-    pub fn insert_at_primary(&mut self, chars: &str) {
-        self.do_insert(self.regions.carets(), chars)
-    }
-
-    pub fn do_insert(&mut self, regions: impl IntoIterator<Item = Region>, chars: &str) {
+    pub fn insert_at_carets(&mut self, chars: &str) {
         // This is also where xi handles surrounding stuff in parens when something is selected.
         // i.e. when the text "foo" is in the selection, and the chars are "(",
         // then this would turn the text into "(foo)"
@@ -113,10 +121,64 @@ impl Buffer {
 
         let mut builder = DeltaBuilder::new(self.text.len());
         let text: Rope = chars.into();
-        for region in regions {
+        for region in self.regions.carets() {
             builder.replace(region, text.clone());
         }
         let delta = builder.build();
         self.commit_delta(delta);
     }
+
+    pub fn delete_backward_at_carets(&mut self) {
+        let mut builder = DeltaBuilder::new(self.text.len());
+        for region in self.regions.carets() {
+            // See xi-editors `offset_for_delete_backwards` function in backward.rs...
+            // all I'll say is `#[allow(clippy::cognitive_complexity)]`.
+            let delete_start = 0.max(region.start - 1);
+            builder.delete(Region::new(delete_start, region.end));
+        }
+        let delta = builder.build();
+        self.commit_delta(delta);
+    }
+
+    pub fn undo(&mut self) {
+        if self.undo_group_id > 1 {
+            let mut undos = BTreeSet::new();
+            undos.insert(self.undo_group_id);
+            self.undo_group_id -= 1;
+            self.engine.undo(undos);
+            self.text = self.engine.get_head().clone();
+        }
+    }
+
+    pub(crate) fn apply_edit_op(&mut self, op: EditOp) {
+        match op {
+            EditOp::Insert(text) => self.insert_at_carets(&text),
+            EditOp::Backspace => self.delete_backward_at_carets(),
+            EditOp::Undo => self.undo(),
+        }
+    }
+
+    pub(crate) fn apply_movement_op(&mut self, op: MovementOp) {
+        for caret in self.regions.carets_mut() {
+            *caret = apply_movement_to_cursor(*caret, op, &self.text);
+        }
+    }
+}
+
+fn apply_movement_to_cursor(region: Region, op: MovementOp, text: &Rope) -> Region {
+    assert!(
+        region.is_cursor(),
+        "Movement for non-cursor regions is not implemented yet, and I'm not sure how to best approach this"
+    );
+    let offset = match op {
+        MovementOp::Left => text
+            .prev_grapheme_offset(region.start)
+            .unwrap_or(region.start),
+        MovementOp::Right => text
+            .next_grapheme_offset(region.start)
+            .unwrap_or(region.start),
+        MovementOp::Up => unimplemented!("Vertical movement"),
+        MovementOp::Down => unimplemented!("Vertical movement"),
+    };
+    Region::cursor(offset)
 }
