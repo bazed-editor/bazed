@@ -21,9 +21,9 @@ impl ViewId {
 /// and thus currently assumes a monospaced font.
 pub struct View {
     /// Index of the first line shown in the viewport
-    pub first_visible_line: usize,
+    pub first_line: usize,
     /// Index of the first column shown in the viewport
-    pub first_visible_col: usize,
+    pub first_col: usize,
     /// Number of lines shown in the viewport
     pub height: usize,
     /// Number of columns shown in the viewport
@@ -35,8 +35,8 @@ pub struct View {
 impl View {
     pub fn new(document_id: DocumentId, height: usize, width: usize) -> Self {
         Self {
-            first_visible_line: 0,
-            first_visible_col: 0,
+            first_line: 0,
+            first_col: 0,
             height,
             width,
             document_id,
@@ -44,15 +44,12 @@ impl View {
     }
 
     /// first and last line shown in the viewport
-    pub fn displayed_lines(&self) -> (usize, usize) {
-        (
-            self.first_visible_line,
-            self.first_visible_line + self.height,
-        )
+    pub fn last_line(&self) -> usize {
+        self.first_line + self.height
     }
 
     /// first and last column shown in the viewport
-    pub fn displayed_cols(&self) -> (usize, usize) {
-        (self.first_visible_col, self.first_visible_col + self.width)
+    pub fn last_col(&self) -> usize {
+        self.first_col + self.width
     }
 }
