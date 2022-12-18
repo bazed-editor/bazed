@@ -1,4 +1,4 @@
-use bazed_rpc::core_proto::{ToFrontend, CaretPosition};
+use bazed_rpc::core_proto::{CaretPosition, ToFrontend};
 use uuid::Uuid;
 
 use crate::buffer::Buffer;
