@@ -17,7 +17,9 @@ async fn main() -> Result<()> {
         .with(ErrorLayer::default())
         .init();
 
-    bazed_core::app::start("127.0.0.1:6969").await?;
+    let edited_file = std::env::args().nth(1);
+
+    bazed_core::app::start("127.0.0.1:6969", edited_file.map(Into::into)).await?;
 
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;

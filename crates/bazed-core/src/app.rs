@@ -25,20 +25,30 @@ impl App {
         }
     }
 
-    #[tracing::instrument(skip(self))]
-    async fn open_ephemeral(&mut self) -> Result<()> {
-        let document = Document::open_ephemeral();
+    async fn open_document(&mut self, document: Document) -> Result<()> {
         let id = DocumentId::gen();
         self.event_send
             .send_rpc_notification(ToFrontend::Open {
                 id: id.0,
-                title: document.title.clone(),
+                path: document.path.clone(),
                 text: document.buffer.content_to_string(),
             })
             .await?;
         self.documents.insert(id, document);
         self.active_document = Some(id);
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn open_file(&mut self, path: std::path::PathBuf) -> Result<()> {
+        let document = Document::open_file(path)?;
+        self.open_document(document).await
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn open_ephemeral(&mut self) -> Result<()> {
+        let document = Document::open_ephemeral();
+        self.open_document(document).await
     }
 
     #[tracing::instrument(skip(self))]
@@ -66,7 +76,7 @@ impl App {
     }
 }
 
-pub async fn start(addr: &str) -> Result<()> {
+pub async fn start(addr: &str, path: Option<std::path::PathBuf>) -> Result<()> {
     let (send, mut recv) = bazed_rpc::server::wait_for_client(addr).await?;
 
     let core = Arc::new(RwLock::new(App::new(send)));
@@ -83,7 +93,11 @@ pub async fn start(addr: &str) -> Result<()> {
         }
     });
 
-    core.write().await.open_ephemeral().await?;
+    if let Some(path) = path {
+        core.write().await.open_file(path).await?;
+    } else {
+        core.write().await.open_ephemeral().await?;
+    }
 
     Ok(())
 }

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -15,7 +17,7 @@ pub struct CaretPosition {
 pub enum ToFrontend {
     Open {
         id: Uuid,
-        title: String,
+        path: Option<PathBuf>,
         text: String,
     },
     UpdateDocument {
