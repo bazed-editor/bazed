@@ -90,6 +90,12 @@ impl Buffer {
         self.engine.get_head().to_string()
     }
 
+    pub fn all_carets(&self) -> NonEmpty<CursorPosition> {
+        self.regions
+            .carets()
+            .map(|x| CursorPosition::from_offset(&self.text, x.start))
+    }
+
     #[tracing::instrument(skip(self))]
     fn commit_delta(&mut self, delta: RopeDelta) -> Rope {
         let head_rev = self.engine.get_head_rev_id();
@@ -208,8 +214,8 @@ fn apply_movement_to_cursor(text: &Rope, region: Region, op: MovementOp) -> Regi
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CursorPosition {
-    line: usize,
-    col: usize,
+    pub line: usize,
+    pub col: usize,
 }
 
 impl CursorPosition {
@@ -220,7 +226,7 @@ impl CursorPosition {
     }
     /// Turn a position into an offset at that point,
     /// snapping to the end of the line if the cursors column is further than the line is long.
-    fn to_offset(&self, text: &Rope) -> usize {
+    fn to_offset(self, text: &Rope) -> usize {
         let line_offset = text.offset_of_line(self.line);
         let next_line_offset = text.offset_of_line(self.line + 1);
         // TODO does that unwrap_or make sense?
@@ -229,13 +235,12 @@ impl CursorPosition {
             .unwrap_or(text.len());
 
         // restrict naive_offset to at max be the end of the given line
-        let actual_offset = if naive_offset >= next_line_offset {
+        if naive_offset >= next_line_offset {
             text.prev_grapheme_offset(next_line_offset)
                 .unwrap_or(naive_offset)
         } else {
             naive_offset
-        };
-        actual_offset
+        }
     }
 
     pub fn with_line(self, line: usize) -> Self {
