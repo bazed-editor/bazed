@@ -23,7 +23,7 @@ impl Region {
         Self { start, end }
     }
 
-    pub fn caret(at: usize) -> Self {
+    pub fn cursor(at: usize) -> Self {
         Self::new(at, at)
     }
 
@@ -43,8 +43,8 @@ impl Region {
         self.end
     }
 
-    /// A region is considered a caret if its length is 0
-    pub fn is_caret(&self) -> bool {
+    /// A region is considered a cursor if its length is 0
+    pub fn is_cursor(&self) -> bool {
         self.start == self.end
     }
 }

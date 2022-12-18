@@ -10,22 +10,22 @@ pub struct Buffer {
     dirty: bool,
     undo_group_id: usize,
     regions: HashMap<RegionId, Region>,
-    primary_caret: RegionId,
+    primary_cursor: RegionId,
 }
 
 impl Buffer {
     pub fn open_ephemeral() -> Self {
         let rope = Rope::from(String::new());
-        let primary_caret = RegionId::gen();
+        let primary_cursor = RegionId::gen();
         let mut regions = HashMap::new();
-        regions.insert(primary_caret, Region::caret(0));
+        regions.insert(primary_cursor, Region::cursor(0));
         Self {
             dirty: false,
             undo_group_id: 1,
             engine: Engine::new(rope.clone()),
             text: rope,
             regions,
-            primary_caret,
+            primary_cursor,
         }
     }
 
@@ -63,8 +63,8 @@ impl Buffer {
     pub fn insert_at_primary(&mut self, chars: &str) {
         let region = self
             .regions
-            .get(&self.primary_caret)
-            .expect("Primary caret not found in regions");
+            .get(&self.primary_cursor)
+            .expect("Primary cursor not found in regions");
         self.do_insert(&[*region], chars)
     }
 
