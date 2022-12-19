@@ -1,4 +1,6 @@
-<script lang="ts" context="module">
+<script
+  lang="ts"
+  context="module">
   import kanagawa from "./kanagawa.js"
   import type { Theme } from "./Theme"
 
@@ -37,6 +39,11 @@
   }
 </script>
 
-<div class="rekuho" style:width>
-  <Portion bind:theme {width} {height} />
+<div
+  class="rekuho"
+  style:width>
+  <Portion
+    bind:theme
+    {width}
+    {height} />
 </div>

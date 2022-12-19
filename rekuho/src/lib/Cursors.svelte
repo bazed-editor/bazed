@@ -1,13 +1,15 @@
-<script lang="ts" context="module">
+<script
+  lang="ts"
+  context="module">
+
   import type { Writable } from "svelte/store"
   import { writable } from "svelte/store"
 
-  import type { Vector } from "./LinearAlgebra"
-  import { vectorMerge } from "./LinearAlgebra"
+  import type { Vector2 } from "./LinearAlgebra"
+  import { merge as vectorMerge } from "./LinearAlgebra"
 
-  export type Position = Vector
-  export type Cursor = { pos: Vector }
-
+  export type Position = Vector2
+  export type Cursor = { pos: Vector2 }
   export let cursors: Writable<Cursor[]> = writable([])
 
   export const cursorUpdate = (id: number, pos: [number | null, number | null]): void => {
@@ -17,7 +19,7 @@
     })
   }
 
-  export const cursorMove = (id: number, movement: Vector): void => {
+  export const cursorMove = (id: number, movement: Vector2): void => {
     cursors.update((cursors) => {
       cursors[0] = { pos: [cursors[id].pos[0] + movement[0], cursors[id].pos[1] + movement[1]] }
       return cursors
@@ -40,7 +42,10 @@
   ]
 </script>
 
-<div class="cursors-layer" style:position="absolute" style:top="0">
+<div
+  class="cursors-layer"
+  style:position="absolute"
+  style:top="0">
   {#each $cursors as { pos }, i}
     {@const [x, y] = transformToScreenPosition(pos)}
     <div

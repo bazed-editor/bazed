@@ -2,6 +2,7 @@
     Portion, may be simply the Editor
     This window contains the visible and editable text.
 -->
+
 <script lang="ts">
   import type { Theme } from "./Theme"
   import LinesView, { lines } from "./LinesView.svelte"
@@ -83,14 +84,18 @@
   const keydown = (ev: KeyboardEvent) => {
     ev.preventDefault() // stops the textarea from filling up with input
     switch (ev.key) {
-      case "h": cursorMove(0, [-1, 0])
-                break
-      case "j": cursorMove(0, [0, 1])
-                break
-      case "k": cursorMove(0, [0, -1])
-                break
-      case "l": cursorMove(0, [1, 0])
-                break
+      case "h":
+        cursorMove(0, [-1, 0])
+        break
+      case "j":
+        cursorMove(0, [0, 1])
+        break
+      case "k":
+        cursorMove(0, [0, -1])
+        break
+      case "l":
+        cursorMove(0, [1, 0])
+        break
     }
     // TODO: Handle input from keydown events
   }
@@ -100,7 +105,11 @@
   }
 </script>
 
-<div class="view" bind:this={view} style:width="{width}px" style:height="{height}px">
+<div
+  class="view"
+  bind:this={view}
+  style:width="{width}px"
+  style:height="{height}px">
   <!--<GutterColumn line_height={line_height} />-->
   <!-- TODO: Maybe place into ex. GutterColumn.svelte -->
   <div
@@ -144,8 +153,13 @@
       style:user-select="text"
       style:position="absolute"
       style:width="{column_width}px" />
-    <LinesView bind:theme {line_height} />
-    <CursorsLayer bind:theme {column_width} {line_height} />
+    <LinesView
+      bind:theme
+      {line_height} />
+    <CursorsLayer
+      bind:theme
+      {column_width}
+      {line_height} />
   </div>
 
   <!-- TODO: Implement scrollbars -->
