@@ -5,7 +5,7 @@ singleQuote: false
 trailingComma: "all"
 printWidth: 100
 insertFinalNewline: true
-bracketSameLine: true
+bracketSameLine: false
 singleAttributePerLine: true
 plugins:
   - "prettier-plugin-svelte"

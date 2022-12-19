@@ -1,7 +1,7 @@
 <script
   lang="ts"
-  context="module">
-
+  context="module"
+>
   import type { Writable } from "svelte/store"
   import { writable } from "svelte/store"
 
@@ -53,7 +53,8 @@
       style:height="{line_height}px"
       style:background={theme.primary_cursor_color}
       style:left="{x}px"
-      style:top="{y}px" />
+      style:top="{y}px"
+    />
   {/each}
 </div>
 

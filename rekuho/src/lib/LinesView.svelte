@@ -1,11 +1,10 @@
 <!--
     LinesView contains lines of text
 -->
-
 <script
   lang="ts"
-  context="module">
-
+  context="module"
+>
   import type { Writable } from "svelte/store"
   import { writable } from "svelte/store"
 
@@ -49,14 +48,16 @@
     <div
       class="line-container"
       style:top="{i * line_height}px"
-      style:height="{line_height}px">
+      style:height="{line_height}px"
+    >
       <span
         class="line-view"
-        style:color={theme.font_color}
-        style:height="{line_height}px"
         style:font-family={theme.font.family}
         style:font-size={theme.font.size}
-        style:line-height="{line_height}px">
+        style:color={theme.text_color}
+        style:height="{line_height}px"
+        style:line-height="{line_height}px"
+      >
         {line}
       </span>
     </div>

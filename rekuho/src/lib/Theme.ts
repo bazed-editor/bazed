@@ -4,11 +4,17 @@ export type Font = {
   weight: string
 }
 
+export type Gutter = {
+  background: string
+  width: number
+}
+
 export type Theme = {
   font: Font
+  gutter: Gutter
 
-  font_color: string
-  gutter_background: string
+  text_color: string
+  text_offset: number
   primary_cursor_color: string
   editor_background: string
 }
@@ -21,13 +27,14 @@ export let example: Theme = {
     weight: "normal",
     size: "20px",
   },
-  text_offset: 10,
+
   gutter: {
     background: kanagawa.sumiInk0,
     width: 50,
   },
 
-  font_color: kanagawa.fujiWhite,
+  text_offset: 10,
+  text_color: kanagawa.fujiWhite,
   primary_cursor_color: kanagawa.fujiWhite,
   editor_background: kanagawa.sumiInk1,
 }

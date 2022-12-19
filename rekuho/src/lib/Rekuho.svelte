@@ -1,7 +1,7 @@
 <script
   lang="ts"
-  context="module">
-
+  context="module"
+>
   const websocket = async () => {
     try {
       const ws = new WebSocket("ws://localhost:6969")
@@ -35,9 +35,11 @@
 
 <div
   class="rekuho"
-  style:width>
+  style:width
+>
   <Portion
     bind:theme
     {width}
-    {height} />
+    {height}
+  />
 </div>
