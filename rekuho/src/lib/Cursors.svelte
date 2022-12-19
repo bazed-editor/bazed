@@ -2,10 +2,27 @@
   import type { Writable } from "svelte/store"
   import { writable } from "svelte/store"
 
-  export type Position = [number, number]
-  export type Cursor = { pos: [number, number] }
+  import type { Vector } from "./LinearAlgebra"
+  import { vectorMerge } from "./LinearAlgebra"
+
+  export type Position = Vector
+  export type Cursor = { pos: Vector }
 
   export let cursors: Writable<Cursor[]> = writable([])
+
+  export const cursorUpdate = (id: number, pos: [number | null, number | null]): void => {
+    cursors.update((cursors) => {
+      cursors[0] = { pos: vectorMerge(cursors[0].pos, pos) }
+      return cursors
+    })
+  }
+
+  export const cursorMove = (id: number, movement: Vector): void => {
+    cursors.update((cursors) => {
+      cursors[0] = { pos: [cursors[id].pos[0] + movement[0], cursors[id].pos[1] + movement[1]] }
+      return cursors
+    })
+  }
 </script>
 
 <script lang="ts">
@@ -16,12 +33,23 @@
   export let line_height: number
 
   const visibility: string = "inherit"
+
+  export const transformToScreenPosition = ([x, y]: Position): Position => [
+    x * column_width,
+    y * line_height,
+  ]
 </script>
 
 <div class="cursors-layer" style:position="absolute" style:top="0">
-  {#each $cursors as { pos: [x, y] }, i}
-    <div style:visibility style:position="absolute" style:width="5px" style:height="{line_height}px"
-         style:background={theme.primary_cursor_color}
-         style:left="{x * column_width}px" style:top="{y * line_height}px" />
+  {#each $cursors as { pos }, i}
+    {@const [x, y] = transformToScreenPosition(pos)}
+    <div
+      style:visibility
+      style:position="absolute"
+      style:width="5px"
+      style:height="{line_height}px"
+      style:background={theme.primary_cursor_color}
+      style:left="{x}px"
+      style:top="{y}px" />
   {/each}
 </div>
