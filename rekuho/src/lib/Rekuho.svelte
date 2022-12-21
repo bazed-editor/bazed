@@ -2,35 +2,37 @@
   lang="ts"
   context="module"
 >
-  const websocket = async () => {
-    try {
-      const ws = new WebSocket("ws://localhost:6969")
-      const cmd = {
-        method: "key_pressed",
-        params: {
-          key: "X",
-          modifiers: [],
-        },
-      }
-
-      await new Promise((resolve) => ws.addEventListener("open", () => resolve(null)))
-      ws.send(JSON.stringify(cmd))
-    } catch (e) {
-      console.log(e)
-    }
-  }
 </script>
 
 <script lang="ts">
   import { example as exampleTheme } from "./Theme"
+  import { initSession, Session, type KeyInput } from "./Rpc"
+
   import Portion from "./Portion.svelte"
+  import { state, type CaretPosition } from "./Core"
 
   export let width: number = 500
   export let height: number = 500
-
   let theme = exampleTheme
 
-  websocket()
+  let session: Session | null = null
+  initSession().then((x) => {
+    session = x
+  })
+
+  function onKeyboardInput(input: KeyInput) {
+    if (!session) {
+      return
+    }
+    session.handleKeyPressed(input)
+  }
+
+  function onMouseClicked(pos: CaretPosition) {
+    if (!session) {
+      return
+    }
+    session.handleMouseClicked(pos)
+  }
 </script>
 
 <div
@@ -39,6 +41,9 @@
 >
   <Portion
     bind:theme
+    onKeyInput={onKeyboardInput}
+    {onMouseClicked}
+    lines={$state.lines}
     {width}
     {height}
   />

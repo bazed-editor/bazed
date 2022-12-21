@@ -2,37 +2,33 @@
   Portion, may be simply the Editor
   This window contains the visible and editable text.
 -->
-
 <script lang="ts">
   import type { Theme } from "./Theme"
-  import LinesView, { lines, isAlpha, insertAt } from "./LinesView.svelte"
-  import type { Position } from "./Cursors.svelte"
-  import CursorsLayer, { cursors, cursorUpdate, cursorMove } from "./Cursors.svelte"
+  import LinesView from "./LinesView.svelte"
+  import CursorsLayer from "./Cursors.svelte"
   import { measure as fontMeasure } from "./Font"
+  import { state, type CaretPosition } from "./Core"
+  import type { Vector2 } from "./LinearAlgebra"
+  import type { Key, KeyInput } from "./Rpc"
 
-  export let theme: Theme
   const gutter_width = 50 // maybe should be part of theme, minimum value?
 
+  export let theme: Theme
   export let height: number
   export let width: number
+  export let lines: string[]
+  export let onKeyInput: (k: KeyInput) => void
+  export let onMouseClicked: (pos: CaretPosition) => void
 
-  let view: Element
   let input: HTMLTextAreaElement
   let container: Element
 
-  // TODO: get proper input from backend
-  lines.update((_) => [
-    ...new Array(10).fill(""),
-    ..."funky\nbanana\nt0wn".split("\n"),
-    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    ...new Array(20).fill("a"),
-  ])
-
-  // let portion_start_line: number = 0
+  const emitKeyboardInput = (key: Key) => onKeyInput({ modifiers: [], key })
 
   // TODO: separate into linear_algebra.ts
   $: view_rect = container && container.getBoundingClientRect()
-  const pxToPortionPosition = ([x, y]: Position): Position => {
+
+  const pxToPortionPosition = ([x, y]: Vector2): Vector2 => {
     const div = (x: number, y: number): number => Math.floor(x / y)
     const column = div(x - view_rect.x, column_width)
     const line = div(y - view_rect.y, line_height)
@@ -44,12 +40,21 @@
   const line_height: number = font_metrics.actualHeight || 0
   const column_width: number = font_metrics.width || 0
 
-  // TODO: implement selections
-  let selection: Position | null = null
+  ////////////////////////////////////////////////////////////////////////////////
 
+  const mouseDown = (ev: MouseEvent) => {
+    const [x, y] = pxToPortionPosition([ev.pageX, ev.pageY])
+    onMouseClicked({ line: y, col: x })
+    input.focus()
+  }
+
+  // We don't have mouse-based selection in the backend yet, :ree:
+
+  /*
   const mousedown = (ev: MouseEvent) => {
-    selection = pxToPortionPosition([ev.pageX, ev.pageY])
-    cursorUpdate(0, selection)
+    const current = pxToPortionPosition([ev.pageX, ev.pageY])
+    selection = current
+    cursorUpdate(0, (_) => current)
     input.focus()
   }
 
@@ -63,30 +68,55 @@
 
   const mousemove = (ev: MouseEvent) => {
     if (selection) {
-      cursorUpdate(0, pxToPortionPosition([ev.pageX, ev.pageY]))
+      cursorUpdate(0, (_) => pxToPortionPosition([ev.pageX, ev.pageY]))
     }
   }
-
-  // TODO: handle drag events
-  // const dragstart = (ev: DragEvent) => {}
-  // const drag = (ev : DragEvent) => {}
+  */
 
   const keydown = (ev: KeyboardEvent) => {
-    // TODO: handle input from keydown events
-    if (ev.key.length === 1 && isAlpha(ev.key.charCodeAt(0))) {
-      insertAt(ev.key, $cursors[0].pos)
-      cursorMove(0, [1, 0])
+    console.log(ev.key)
+    if (ev.key.length === 1) {
+      emitKeyboardInput({ char: ev.key })
+    }
+
+    switch (ev.key) {
+      case "Enter":
+        emitKeyboardInput("return")
+        break
+      case "Backspace":
+        emitKeyboardInput("backspace")
+        break
+      case "ArrowLeft":
+        emitKeyboardInput("left")
+        break
+      case "ArrowRight":
+        emitKeyboardInput("right")
+        break
+      case "ArrowUp":
+        emitKeyboardInput("up")
+        break
+      case "ArrowDown":
+        emitKeyboardInput("down")
+        break
     }
   }
 
-  const gutter_mousedown = (line: number, ev: MouseEvent) => {
-    cursorUpdate(0, [null, line])
+  const gutter_mousedown = (line: number, _ev: MouseEvent) => {
+    onMouseClicked({ col: 0, line })
   }
+
+  ////////////////////////////////////////////////////////////////////////////////
+
+  let line_view_height: number
+  let line_view_width: number
+
+  $: text_view_width = width - gutter_width
+  $: text_to_visible_ratio = (line_view_width * column_width - theme.text_offset) / width
+  $: vertical_scroller_width = text_view_width / text_to_visible_ratio
 </script>
 
 <div
   class="view"
-  bind:this={view}
   style:width="{width}px"
   style:height="{height}px"
 >
@@ -98,7 +128,7 @@
     style:width="{gutter_width}px"
     style:height="{height}px"
   >
-    {#each $lines as _, i}
+    {#each lines as _, i}
       <div
         class="gutter-cell"
         on:mousedown|preventDefault={(e) => {
@@ -112,7 +142,10 @@
       </div>
     {/each}
   </div>
+
+  <!-- don't know if this thing ought to exist at all -->
   <div
+    class="text-offset-background"
     style:position="absolute"
     style:height="{height}px"
     style:top="0"
@@ -120,12 +153,13 @@
     style:width="{theme.text_offset}px"
     style:left="{gutter_width}px"
   />
+
   <div
     bind:this={container}
     class="container"
-    on:mousedown|preventDefault={mousedown}
-    on:mousemove={mousemove}
-    on:mouseup={mouseup}
+    on:mousedown|preventDefault={mouseDown}
+    on:mousemove={() => {}}
+    on:mouseup={() => {}}
     style:background={theme.editor_background}
     style:left="{gutter_width + theme.text_offset}px"
   >
@@ -140,10 +174,14 @@
     />
     <LinesView
       bind:theme
+      bind:height={line_view_height}
+      bind:width={line_view_width}
+      lines={$state.lines}
       {line_height}
     />
     <CursorsLayer
       bind:theme
+      cursors={$state.carets}
       {column_width}
       {line_height}
     />
@@ -152,19 +190,42 @@
   <!-- TODO: Implement scrollbars -->
   <!-- <Scrollbar /> -->
   <!-- <Scrollbar /> -->
+  <div
+    class="scrollbar vertical"
+    style:height="{theme.scrollbar_width}px"
+    style:width="{width - gutter_width}px"
+    style:left="{gutter_width}px"
+    style:top="{height - theme.scrollbar_width}px"
+  >
+    <div
+      class="scroller"
+      on:mousedown|preventDefault={(_) => {}}
+      style:height="{theme.scrollbar_width}px"
+      style:width="{vertical_scroller_width}px"
+      style:background="#FFFFFF"
+    />
+  </div>
 </div>
 
 <style>
+  .view {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scrollbar {
+    position: absolute;
+  }
+
+  .scroller {
+    position: absolute;
+  }
+
   .gutter-cell {
     width: 50px;
     font-family: monospace;
     position: absolute;
     text-align: right;
-  }
-
-  .view {
-    position: relative;
-    overflow: hidden;
   }
 
   .container {
