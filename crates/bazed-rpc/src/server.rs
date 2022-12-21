@@ -44,7 +44,9 @@ pub async fn wait_for_client(
                                 break;
                             }
                         },
-                        Err(err) => tracing::error!("Error parsing rpc message: {err:?}"),
+                        Err(err) => {
+                            tracing::error!(raw_json = json, "Error parsing rpc message: {err:?}")
+                        },
                     }
                 },
                 Ok(other) => tracing::warn!("Got unsupported websocket message: {other:?}"),
