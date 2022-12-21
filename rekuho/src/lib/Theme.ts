@@ -13,6 +13,7 @@ export type Theme = {
   font: Font
   gutter: Gutter
 
+  scrollbar_width: number
   text_color: string
   text_offset: number
   primary_cursor_color: string
@@ -33,6 +34,7 @@ export const example: Theme = {
     width: 50,
   },
 
+  scrollbar_width: 12,
   text_offset: 10,
   text_color: kanagawa.fujiWhite,
   primary_cursor_color: kanagawa.fujiWhite,
