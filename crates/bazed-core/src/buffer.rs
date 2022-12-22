@@ -6,7 +6,7 @@ use xi_rope::{engine::Engine, tree::NodeInfo, DeltaBuilder, Rope, RopeDelta, Tra
 
 use crate::{
     mark::{Mark, MarkId},
-    user_buffer_op::{BufferOp, EditOp, MovementOp},
+    user_buffer_op::{EditOp, MovementOp},
 };
 
 /// Stores all the active marks in a buffer.
@@ -15,6 +15,7 @@ use crate::{
 /// - *Mark* refers to any marked position in the buffer
 /// - *Caret* refers to marks that represent concrete, user-controlled carets.
 ///   (i.e.: The places where text gets inserted)
+#[derive(Debug)]
 struct BufferMarks {
     marks: HashMap<MarkId, Mark>,
     /// All the active carets. There will always be at least one.
@@ -68,6 +69,7 @@ impl BufferMarks {
     }
 }
 
+#[derive(Debug)]
 pub struct Buffer {
     text: Rope,
     engine: Engine,
@@ -91,6 +93,11 @@ impl Buffer {
 
     pub fn content_to_string(&self) -> String {
         self.engine.get_head().to_string()
+    }
+
+    /// Return a snapshot of the latest commited state of the text
+    pub fn head_rope(&self) -> &Rope {
+        self.engine.get_head()
     }
 
     pub fn all_carets(&self) -> NonEmpty<Position> {
@@ -167,13 +174,6 @@ impl Buffer {
             self.undo_group_id -= 1;
             self.engine.undo(undos);
             self.text = self.engine.get_head().clone();
-        }
-    }
-
-    pub(crate) fn apply_buffer_op(&mut self, op: BufferOp) {
-        match op {
-            BufferOp::Edit(x) => self.apply_edit_op(x),
-            BufferOp::Movement(x) => self.apply_movement_op(x),
         }
     }
 
