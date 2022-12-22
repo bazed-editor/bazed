@@ -21,10 +21,16 @@ pub(crate) enum EditOp {
     Undo,
 }
 
+// currently just used in tests
+#[allow(unused)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(crate) enum MovementOp {
     Left,
     Right,
     Up,
     Down,
+    StartOfLine,
+    EndOfLine,
+    TopOfViewport,
+    BottomOfViewport,
 }
