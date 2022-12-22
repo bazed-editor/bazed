@@ -62,14 +62,11 @@ pub enum ToBackend {
     ViewportChanged {
         view_id: Uuid,
         height: usize,
-        width: usize,
         first_line: usize,
-        first_col: usize,
     },
     ViewOpened {
         request_id: RequestId,
         document_id: Uuid,
         height: usize,
-        width: usize,
     },
 }

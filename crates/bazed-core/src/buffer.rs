@@ -7,7 +7,7 @@ use xi_rope::{engine::Engine, tree::NodeInfo, DeltaBuilder, Rope, RopeDelta, Tra
 use crate::{
     mark::{Mark, MarkId},
     user_buffer_op::{EditOp, MovementOp},
-    view::View,
+    view::Viewport,
 };
 
 /// Stores all the active marks in a buffer.
@@ -186,14 +186,14 @@ impl Buffer {
         }
     }
 
-    pub(crate) fn apply_movement_op(&mut self, view: &View, op: MovementOp) {
+    pub(crate) fn apply_movement_op(&mut self, viewport: &Viewport, op: MovementOp) {
         for mark in self.marks.carets_mut() {
-            *mark = apply_movement_to_mark(&self.text, view, *mark, op);
+            *mark = apply_movement_to_mark(&self.text, viewport, *mark, op);
         }
     }
 }
 
-fn apply_movement_to_mark(text: &Rope, view: &View, mark: Mark, op: MovementOp) -> Mark {
+fn apply_movement_to_mark(text: &Rope, vp: &Viewport, mark: Mark, op: MovementOp) -> Mark {
     let offset = match op {
         MovementOp::Left => text
             .prev_grapheme_offset(mark.offset)
@@ -233,12 +233,12 @@ fn apply_movement_to_mark(text: &Rope, view: &View, mark: Mark, op: MovementOp) 
         },
         MovementOp::TopOfViewport => {
             let current_pos = Position::from_offset(text, mark.offset);
-            current_pos.with_line(view.first_line).to_offset(text)
+            current_pos.with_line(vp.first_line).to_offset(text)
         },
         MovementOp::BottomOfViewport => {
             let current_pos = Position::from_offset(text, mark.offset);
             let last_line = text.line_of_offset(text.len());
-            let target_line = view.last_line().min(last_line);
+            let target_line = vp.last_line().min(last_line);
             current_pos.with_line(target_line).to_offset(text)
         },
     };
@@ -296,7 +296,7 @@ mod test {
     use std::sync::Once;
 
     use super::*;
-    use crate::document::DocumentId;
+    use crate::view::Viewport;
 
     static INIT: Once = Once::new();
     fn setup_test() {
@@ -325,31 +325,42 @@ mod test {
     }
 
     #[test]
+    fn test_move_caret_empty() {
+        setup_test();
+        let mut b = Buffer::new_empty();
+        let vp = Viewport::new_ginormeous();
+        // An empty file doesn't allow much movement...
+        // Let's hope we don't break the walls
+        b.apply_movement_op(&vp, MovementOp::Left);
+        b.apply_movement_op(&vp, MovementOp::Right);
+        b.apply_movement_op(&vp, MovementOp::Down);
+        b.apply_movement_op(&vp, MovementOp::Up);
+        b.apply_movement_op(&vp, MovementOp::StartOfLine);
+        b.apply_movement_op(&vp, MovementOp::EndOfLine);
+        b.apply_movement_op(&vp, MovementOp::TopOfViewport);
+        b.apply_movement_op(&vp, MovementOp::BottomOfViewport);
+    }
+
+    #[test]
     fn test_move_caret_edges() {
         setup_test();
         let mut b = Buffer::new_empty();
-        let view = View {
-            first_line: 0,
-            first_col: 0,
-            height: 100,
-            width: 100,
-            document_id: DocumentId::gen(),
-        };
+        let vp = Viewport::new_ginormeous();
         // Let's just spam moving into the walls and see if it breaks
         b.insert_at_carets("hi\nho");
-        b.apply_movement_op(&view, MovementOp::Down);
-        b.apply_movement_op(&view, MovementOp::Down);
+        b.apply_movement_op(&vp, MovementOp::Down);
+        b.apply_movement_op(&vp, MovementOp::Down);
         assert_eq!(b.text.len(), b.marks.carets().first().offset);
-        b.apply_movement_op(&view, MovementOp::Right);
-        b.apply_movement_op(&view, MovementOp::Right);
+        b.apply_movement_op(&vp, MovementOp::Right);
+        b.apply_movement_op(&vp, MovementOp::Right);
         assert_eq!(b.text.len(), b.marks.carets().first().offset);
-        b.apply_movement_op(&view, MovementOp::Up);
-        b.apply_movement_op(&view, MovementOp::Up);
-        b.apply_movement_op(&view, MovementOp::Up);
+        b.apply_movement_op(&vp, MovementOp::Up);
+        b.apply_movement_op(&vp, MovementOp::Up);
+        b.apply_movement_op(&vp, MovementOp::Up);
         assert_eq!(2, b.marks.carets().first().offset);
-        b.apply_movement_op(&view, MovementOp::Left);
-        b.apply_movement_op(&view, MovementOp::Left);
-        b.apply_movement_op(&view, MovementOp::Left);
+        b.apply_movement_op(&vp, MovementOp::Left);
+        b.apply_movement_op(&vp, MovementOp::Left);
+        b.apply_movement_op(&vp, MovementOp::Left);
         assert_eq!(0, b.marks.carets().first().offset);
     }
 
@@ -357,15 +368,9 @@ mod test {
     fn test_move_caret_into_shorter_line() {
         setup_test();
         let mut b = Buffer::new_empty();
-        let view = View {
-            first_line: 0,
-            first_col: 0,
-            height: 100,
-            width: 100,
-            document_id: DocumentId::gen(),
-        };
+        let vp = Viewport::new_ginormeous();
         b.insert_at_carets("hi\nworld");
-        b.apply_movement_op(&view, MovementOp::Up);
+        b.apply_movement_op(&vp, MovementOp::Up);
         b.insert_at_carets(",");
         assert_eq!("hi,\nworld", b.content_to_string());
     }
@@ -374,20 +379,14 @@ mod test {
     fn test_highlevel_movement_line_ends() {
         setup_test();
         let mut b = Buffer::new_empty();
-        let view = View {
-            first_line: 0,
-            first_col: 0,
-            height: 100,
-            width: 100,
-            document_id: DocumentId::gen(),
-        };
+        let vp = Viewport::new_ginormeous();
         b.insert_at_carets("hello");
-        b.apply_movement_op(&view, MovementOp::Left);
-        b.apply_movement_op(&view, MovementOp::Left);
+        b.apply_movement_op(&vp, MovementOp::Left);
+        b.apply_movement_op(&vp, MovementOp::Left);
         assert_eq!(3, b.marks.carets().first().offset);
-        b.apply_movement_op(&view, MovementOp::EndOfLine);
+        b.apply_movement_op(&vp, MovementOp::EndOfLine);
         assert_eq!(5, b.marks.carets().first().offset);
-        b.apply_movement_op(&view, MovementOp::StartOfLine);
+        b.apply_movement_op(&vp, MovementOp::StartOfLine);
         assert_eq!(0, b.marks.carets().first().offset);
     }
 
@@ -395,25 +394,22 @@ mod test {
     fn test_highlevel_movement_viewport() {
         setup_test();
         let mut b = Buffer::new_empty();
-        let mut view = View {
+        let mut vp = Viewport {
             first_line: 1,
-            first_col: 0,
             height: 2,
-            width: 100,
-            document_id: DocumentId::gen(),
         };
         b.insert_at_carets("0000\n1111\n2222\n3333\n4444");
-        b.apply_movement_op(&view, MovementOp::Up);
-        b.apply_movement_op(&view, MovementOp::Up);
+        b.apply_movement_op(&vp, MovementOp::Up);
+        b.apply_movement_op(&vp, MovementOp::Up);
         assert_eq!(2, b.all_carets().first().line);
-        b.apply_movement_op(&view, MovementOp::TopOfViewport);
+        b.apply_movement_op(&vp, MovementOp::TopOfViewport);
         assert_eq!(1, b.all_carets().first().line);
-        b.apply_movement_op(&view, MovementOp::BottomOfViewport);
+        b.apply_movement_op(&vp, MovementOp::BottomOfViewport);
         assert_eq!(3, b.all_carets().first().line);
 
         // verify we don't die if the bottom of the viewport is below the last line
-        view.height = 100;
-        b.apply_movement_op(&view, MovementOp::BottomOfViewport);
+        vp.height = 100;
+        b.apply_movement_op(&vp, MovementOp::BottomOfViewport);
         assert_eq!(4, b.all_carets().first().line);
     }
 }
