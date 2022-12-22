@@ -1,0 +1,28 @@
+name: CI
+on:
+  pull_request:
+  push:
+
+env:
+  CI: 1
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  RUST_BACKTRACE: short
+  RUSTFLAGS: -D warnings
+
+jobs:
+  test:
+    name: Rust
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup rust toolchain
+      run: rustup show
+    - uses: EmbarkStudios/cargo-deny-action@v1
+    - uses: Swatinem/rust-cache@v2
+    - name: Build
+      run: cargo test --workspace --all-features --no-run
+    - name: Run tests
+      run: cargo test --workspace --all-features
