@@ -13,6 +13,7 @@ use tokio::sync::RwLock;
 use crate::{
     document::{Document, DocumentId},
     input_mapper::interpret_key_input,
+    user_buffer_op::{DocumentOp, Operation},
     view::{View, ViewId},
 };
 
@@ -121,7 +122,7 @@ impl App {
             .documents
             .get_mut(&document_id)
             .ok_or(Error::InvalidDocumentId(document_id))?;
-        Ok(document.write_to_file()?)
+        Ok(document.write_to_file().await?)
     }
 
     async fn handle_viewport_changed(
@@ -167,7 +168,13 @@ impl App {
             tracing::info!("Ignoring unhandled key input: {input:?}");
             return Ok(())
         };
-        document.buffer.apply_buffer_op(operation);
+        match operation {
+            Operation::Document(op) => match op {
+                DocumentOp::Save => document.write_to_file().await?,
+            },
+            Operation::Edit(op) => document.buffer.apply_edit_op(op),
+            Operation::Movement(op) => document.buffer.apply_movement_op(op),
+        }
         self.event_send
             .send_rpc(document.create_update_notification(view_id, view))
             .await?;

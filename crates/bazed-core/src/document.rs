@@ -1,7 +1,13 @@
-use std::{io::Write, path::PathBuf};
+use std::{
+    ffi::OsString,
+    fs::File,
+    io::{self, Write},
+    path::PathBuf,
+};
 
 use bazed_rpc::core_proto::{CaretPosition, ToFrontend};
 use uuid::Uuid;
+use xi_rope::Rope;
 
 use crate::{
     buffer::Buffer,
@@ -20,6 +26,7 @@ impl DocumentId {
     }
 }
 
+#[derive(Debug)]
 pub struct Document {
     pub path: Option<PathBuf>,
     pub buffer: Buffer,
@@ -41,13 +48,14 @@ impl Document {
         })
     }
 
-    /// Save the current buffer state to its path. Does nothing when no path is set.
-    pub fn write_to_file(&self) -> std::io::Result<()> {
-        // TODO this should save a snapshot of the rope asynchronously,
-        // although idk on what layer that would be implemented
-        let Some(ref path) = self.path else { return Ok(()) };
-        let mut file = std::fs::File::options().write(true).open(path)?;
-        file.write_all(self.buffer.content_to_string().as_bytes())
+    /// Asynchronously save the current buffer state to its path. Does nothing when no path is set.
+    pub async fn write_to_file(&self) -> std::io::Result<()> {
+        tracing::info!(document = ?self, "Saving document");
+        if let Some(path) = self.path.clone() {
+            let rope = self.buffer.head_rope().clone();
+            tokio::task::spawn_blocking(move || write_rope_to_file(&path, &rope)).await??;
+        }
+        Ok(())
     }
 
     /// Create a notification for the frontend, that contains all relevant state of this document.
@@ -79,4 +87,41 @@ impl Document {
                 .into(),
         }
     }
+}
+
+/// write a rope to a file by first writing to a .swp file and then renaming
+fn write_rope_to_file(path: &std::path::Path, rope: &Rope) -> io::Result<()> {
+    // we first write the text to a tmp file with the same name, but ending in .swp
+    let tmp_extension = path.extension().map_or_else(
+        || OsString::from("swp"),
+        |ext| {
+            let mut ext = ext.to_os_string();
+            ext.push(".swp");
+            ext
+        },
+    );
+    let tmp_path = &path.with_extension(tmp_extension);
+    let mut file = File::create(tmp_path)?;
+    for chunk in rope.iter_chunks(..rope.len()) {
+        file.write_all(chunk.as_bytes())?;
+    }
+
+    // remember the files permissions, if it already exists
+    let permissions = std::fs::metadata(path).ok().map(|x| x.permissions());
+
+    // rename the file to its actual desired name
+    std::fs::rename(tmp_path, path)?;
+
+    if let Some(permissions) = permissions {
+        // And apply the permissions again
+        if let Err(err) = std::fs::set_permissions(path, permissions) {
+            tracing::warn!(
+                "Failed to set permissions on file {}: {}",
+                path.display(),
+                err,
+            )
+        }
+    }
+
+    Ok(())
 }
