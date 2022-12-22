@@ -173,7 +173,7 @@ impl App {
                 DocumentOp::Save => document.write_to_file().await?,
             },
             Operation::Edit(op) => document.buffer.apply_edit_op(op),
-            Operation::Movement(op) => document.buffer.apply_movement_op(op),
+            Operation::Movement(op) => document.buffer.apply_movement_op(view, op),
         }
         self.event_send
             .send_rpc(document.create_update_notification(view_id, view))
