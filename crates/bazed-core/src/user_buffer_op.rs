@@ -3,9 +3,15 @@
 //! These will occur at the caret positions, and are thus only used for directly userfacing operations
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub(crate) enum BufferOp {
+pub(crate) enum Operation {
+    Document(DocumentOp),
     Edit(EditOp),
     Movement(MovementOp),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub(crate) enum DocumentOp {
+    Save,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
