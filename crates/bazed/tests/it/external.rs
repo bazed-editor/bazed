@@ -1,6 +1,7 @@
 //! This module tests the project strurcture with external tools like cargo fmt or cargo deny.
 
 use std::{
+    env,
     path::PathBuf,
     process::{Command, Stdio},
 };
@@ -36,6 +37,11 @@ fn cargo_fmt_check() {
 
 #[test]
 fn cargo_deny_check() {
+    if env::var_os("CI").is_some() {
+        // we are already checking cargo deny via EmbarkStudios/cargo-deny-action@v1
+        return;
+    }
+
     let output = Command::new("cargo")
         .args(["deny", "check"])
         .current_dir(project_root())
