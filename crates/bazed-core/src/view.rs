@@ -17,39 +17,46 @@ impl ViewId {
 // TODO this will need to also account for variable-width fonts, ligatures as well as tab characters in the future.
 
 /// A view represents a part of a [Buffer] that is shown by a client.
-/// It stores information about the viewport in terms of lines and columns,
-/// and thus currently assumes a monospaced font.
 pub struct View {
-    /// Index of the first line shown in the viewport
-    pub first_line: usize,
-    /// Index of the first column shown in the viewport
-    pub first_col: usize,
-    /// Number of lines shown in the viewport
-    pub height: usize,
-    /// Number of columns shown in the viewport
-    pub width: usize,
     /// Id of the [Document] this view looks into
     pub document_id: DocumentId,
+    /// Viewport of this view
+    pub vp: Viewport,
 }
 
 impl View {
-    pub fn new(document_id: DocumentId, height: usize, width: usize) -> Self {
+    pub fn new(document_id: DocumentId, viewport: Viewport) -> Self {
         Self {
-            first_line: 0,
-            first_col: 0,
-            height,
-            width,
             document_id,
+            vp: viewport,
         }
     }
+}
 
+/// Information about which part of a [Buffer] is visible to the client.
+/// Currently only vertical position and height is considered.
+pub struct Viewport {
+    /// Index of the first line shown in the viewport
+    pub first_line: usize,
+    /// Number of lines shown in the viewport
+    pub height: usize,
+}
+
+impl Viewport {
+    pub fn new(first_line: usize, height: usize) -> Self {
+        Self { first_line, height }
+    }
+
+    /// Create a viewport starting at line 0 and going down 100 million lines.
+    #[cfg(test)]
+    pub fn new_ginormeous() -> Self {
+        Self {
+            first_line: 0,
+            height: 100_000_000,
+        }
+    }
     /// first and last line shown in the viewport
     pub fn last_line(&self) -> usize {
         self.first_line + self.height
-    }
-
-    /// first and last column shown in the viewport
-    pub fn last_col(&self) -> usize {
-        self.first_col + self.width
     }
 }

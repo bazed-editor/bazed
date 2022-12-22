@@ -14,7 +14,7 @@ use crate::{
     document::{Document, DocumentId},
     input_mapper::interpret_key_input,
     user_buffer_op::{DocumentOp, Operation},
-    view::{View, ViewId},
+    view::{View, ViewId, Viewport},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -80,27 +80,18 @@ impl App {
             ToBackend::ViewportChanged {
                 view_id,
                 height,
-                width,
                 first_line,
-                first_col,
             } => {
-                self.handle_viewport_changed(
-                    ViewId::from_uuid(view_id),
-                    height,
-                    width,
-                    first_line,
-                    first_col,
-                )
-                .await?;
+                self.handle_viewport_changed(ViewId::from_uuid(view_id), height, first_line)
+                    .await?;
             },
             ToBackend::ViewOpened {
                 request_id,
                 document_id,
                 height,
-                width,
             } => {
                 let view_id = self
-                    .handle_view_opened(DocumentId::from_uuid(document_id), height, width)
+                    .handle_view_opened(DocumentId::from_uuid(document_id), height)
                     .await?;
                 self.event_send
                     .send_rpc(ToFrontend::ViewOpenedResponse {
@@ -129,19 +120,15 @@ impl App {
         &mut self,
         view_id: ViewId,
         height: usize,
-        width: usize,
         first_line: usize,
-        first_col: usize,
     ) -> Result<()> {
         let view = self
             .views
             .get_mut(&view_id)
             .ok_or(Error::InvalidViewId(view_id))?;
-        let needs_new_view_info = height > view.height || view.first_line != first_line;
-        view.width = width;
-        view.height = height;
-        view.first_line = first_line;
-        view.first_col = first_col;
+        let needs_new_view_info = height > view.vp.height || view.vp.first_line != first_line;
+        view.vp.height = height;
+        view.vp.first_line = first_line;
 
         if needs_new_view_info {
             let document = self
@@ -173,7 +160,7 @@ impl App {
                 DocumentOp::Save => document.write_to_file().await?,
             },
             Operation::Edit(op) => document.buffer.apply_edit_op(op),
-            Operation::Movement(op) => document.buffer.apply_movement_op(view, op),
+            Operation::Movement(op) => document.buffer.apply_movement_op(&view.vp, op),
         }
         self.event_send
             .send_rpc(document.create_update_notification(view_id, view))
@@ -194,12 +181,11 @@ impl App {
         &mut self,
         document_id: DocumentId,
         height: usize,
-        width: usize,
     ) -> Result<ViewId> {
         if !self.documents.contains_key(&document_id) {
             return Err(Error::InvalidDocumentId(document_id).into());
         }
-        let view = View::new(document_id, height, width);
+        let view = View::new(document_id, Viewport::new(0, height));
         let id = ViewId::gen();
         self.views.insert(id, view);
         Ok(id)
