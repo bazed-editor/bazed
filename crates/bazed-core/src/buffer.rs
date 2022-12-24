@@ -1,14 +1,17 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
 use nonempty::{nonempty, NonEmpty};
 use tap::Pipe;
 use xi_rope::{engine::Engine, tree::NodeInfo, DeltaBuilder, Rope, RopeDelta, Transformer};
 
+use self::undo_history::UndoHistory;
 use crate::{
     mark::{Mark, MarkId},
-    user_buffer_op::{EditOp, MovementOp},
+    user_buffer_op::{EditOp, EditType, MovementOp},
     view::Viewport,
 };
+
+mod undo_history;
 
 /// Stores all the active marks in a buffer.
 ///
@@ -50,6 +53,7 @@ impl BufferMarks {
         self.apply_transformer(&mut transformer);
     }
 
+    /// Return all carets in this buffer
     fn carets(&self) -> NonEmpty<Mark> {
         self.carets
             .iter()
@@ -59,6 +63,7 @@ impl BufferMarks {
             .unwrap()
     }
 
+    /// Return an iterator over mutable references to all carets in this buffer
     fn carets_mut(&mut self) -> impl Iterator<Item = &mut Mark> {
         // TODO This is stupid, but iterating over self.carets instead and getting the refs
         // through get_mut doesn't work trivially, as rust can't verify that we won't get multiple
@@ -74,18 +79,21 @@ impl BufferMarks {
 pub struct Buffer {
     text: Rope,
     engine: Engine,
-    undo_group_id: usize,
     marks: BufferMarks,
+    undo_history: UndoHistory,
+    /// edit type of the most recently performed action, kept for grouping edits into undo-groups
+    last_edit_type: EditType,
 }
 
 impl Buffer {
     pub fn new_from_string(s: String) -> Self {
         let rope = Rope::from(s);
         Self {
-            undo_group_id: 1,
             engine: Engine::new(rope.clone()),
             text: rope,
             marks: BufferMarks::default(),
+            undo_history: UndoHistory::default(),
+            last_edit_type: EditType::Other,
         }
     }
     pub fn new_empty() -> Self {
@@ -101,7 +109,7 @@ impl Buffer {
         self.engine.get_head()
     }
 
-    pub fn all_carets(&self) -> NonEmpty<Position> {
+    pub fn all_caret_positions(&self) -> NonEmpty<Position> {
         self.marks
             .carets()
             .map(|x| Position::from_offset(&self.text, x.offset))
@@ -118,27 +126,39 @@ impl Buffer {
         self.text.lines(..).skip(low).take(high - low)
     }
 
-    #[tracing::instrument(skip(self))]
-    fn commit_delta(&mut self, delta: RopeDelta) -> Rope {
-        let head_rev = self.engine.get_head_rev_id();
-        let undo_group = self.calculate_undo_group();
-        //self.last_edit_type = self.this_edit_type;
+    /// Snap all marks to the closest valid points in the buffer.
+    ///
+    /// This may be required if an action (such as undo, currently) changes the buffer
+    /// without moving the marks accordingly. In the future, this should not be required
+    /// as all actions _should_ move all marks properly, either through a coordinate transform
+    /// with [xi_rope::Transformer], or, in the case of undo, by remembering where the carets where before.
+    ///
+    /// **WARNING:** This is very much a temporary solution, as it _will_ cause inconsistent state as soon as we use
+    /// marks for more than just caret position.
+    fn snap_marks_to_valid_position(&mut self) {
+        for mark in self.marks.marks.values_mut() {
+            if mark.offset > self.text.len() {
+                mark.offset = self.text.len();
+            }
+        }
+    }
 
+    #[tracing::instrument(skip(self), fields(head_rev_id = ?self.engine.get_head_rev_id()))]
+    fn commit_delta(&mut self, delta: RopeDelta, edit_type: EditType) -> Rope {
+        tracing::debug!("Committing delta");
         self.marks.apply_delta(&delta);
+
+        let head_rev = self.engine.get_head_rev_id();
+        let undo_group = self
+            .undo_history
+            .perform_edit(self.last_edit_type != edit_type);
+        tracing::trace!(undo_group, "determined undo group id");
+        self.last_edit_type = edit_type;
+
         self.engine.edit_rev(1, undo_group, head_rev.token(), delta);
 
         self.text = self.engine.get_head().clone();
         self.text.clone()
-    }
-
-    fn calculate_undo_group(&mut self) -> usize {
-        // TODO Currently this just creates a new undo group every time.
-        // in the future, we should possibly create undo groups based
-        // on edit types that belong together (i.e. insert, delete, etc).
-        // this would mean that consecutive edits of the same kind,
-        // will get merged into the same undo group.
-        self.undo_group_id += 1;
-        self.undo_group_id
     }
 
     fn insert_at_carets(&mut self, chars: &str) {
@@ -153,7 +173,7 @@ impl Buffer {
             builder.replace(mark, text.clone());
         }
         let delta = builder.build();
-        self.commit_delta(delta);
+        self.commit_delta(delta, EditType::Insert);
     }
 
     fn delete_backward_at_carets(&mut self) {
@@ -165,17 +185,49 @@ impl Buffer {
             builder.delete(delete_start..mark.offset);
         }
         let delta = builder.build();
-        self.commit_delta(delta);
+        self.commit_delta(delta, EditType::Delete);
     }
 
     fn undo(&mut self) {
-        if self.undo_group_id > 1 {
-            let mut undos = BTreeSet::new();
-            undos.insert(self.undo_group_id);
-            self.undo_group_id -= 1;
-            self.engine.undo(undos);
+        tracing::trace!(
+            history = ?self.undo_history,
+            head_rev_id = ?self.engine.get_head_rev_id(),
+            "before undo",
+        );
+        if self.undo_history.undo() {
+            self.last_edit_type = EditType::Other;
+            self.engine
+                .undo(self.undo_history.currently_undone().clone());
             self.text = self.engine.get_head().clone();
+            // TODO (https://github.com/bazed-editor/bazed/issues/47) properly handle marks in undo
+            self.snap_marks_to_valid_position();
         }
+        tracing::trace!(
+            history = ?self.undo_history,
+            head_rev_id = ?self.engine.get_head_rev_id(),
+            "after undo",
+        );
+    }
+
+    fn redo(&mut self) {
+        tracing::trace!(
+            currently_undone = ?self.undo_history.currently_undone(),
+            current_undo_group_id = ?self.undo_history.current_undo_group_id(),
+            "before redo",
+        );
+        if self.undo_history.redo() {
+            self.last_edit_type = EditType::Other;
+            self.engine
+                .undo(self.undo_history.currently_undone().clone());
+            self.text = self.engine.get_head().clone();
+            // TODO (https://github.com/bazed-editor/bazed/issues/47) properly handle marks in undo
+            self.snap_marks_to_valid_position();
+        }
+        tracing::trace!(
+            currently_undone = ?self.undo_history.currently_undone(),
+            current_undo_group_id = ?self.undo_history.current_undo_group_id(),
+            "after redo",
+        );
     }
 
     pub(crate) fn apply_edit_op(&mut self, op: EditOp) {
@@ -183,6 +235,7 @@ impl Buffer {
             EditOp::Insert(text) => self.insert_at_carets(&text),
             EditOp::Backspace => self.delete_backward_at_carets(),
             EditOp::Undo => self.undo(),
+            EditOp::Redo => self.redo(),
         }
     }
 
@@ -293,19 +346,13 @@ impl Position {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Once;
-
     use super::*;
+    use crate::test_util;
     use crate::view::Viewport;
-
-    static INIT: Once = Once::new();
-    fn setup_test() {
-        INIT.call_once(|| color_eyre::install().unwrap());
-    }
 
     #[test]
     fn test_insert() {
-        setup_test();
+        test_util::setup_test();
         let mut b = Buffer::new_empty();
         b.insert_at_carets("hel");
         b.insert_at_carets("lo");
@@ -314,19 +361,25 @@ mod test {
 
     #[test]
     fn test_backspace() {
-        setup_test();
+        test_util::setup_test();
         let mut b = Buffer::new_empty();
         b.insert_at_carets("a");
         assert_eq!("a", b.content_to_string());
         b.delete_backward_at_carets();
         assert_eq!("", b.content_to_string());
+    }
+
+    #[test]
+    fn test_backspace_empty() {
+        test_util::setup_test();
+        let mut b = Buffer::new_empty();
         b.delete_backward_at_carets();
         assert_eq!("", b.content_to_string());
     }
 
     #[test]
     fn test_move_caret_empty() {
-        setup_test();
+        test_util::setup_test();
         let mut b = Buffer::new_empty();
         let vp = Viewport::new_ginormeous();
         // An empty file doesn't allow much movement...
@@ -343,7 +396,7 @@ mod test {
 
     #[test]
     fn test_move_caret_edges() {
-        setup_test();
+        test_util::setup_test();
         let mut b = Buffer::new_empty();
         let vp = Viewport::new_ginormeous();
         // Let's just spam moving into the walls and see if it breaks
@@ -366,7 +419,7 @@ mod test {
 
     #[test]
     fn test_move_caret_into_shorter_line() {
-        setup_test();
+        test_util::setup_test();
         let mut b = Buffer::new_empty();
         let vp = Viewport::new_ginormeous();
         b.insert_at_carets("hi\nworld");
@@ -377,7 +430,7 @@ mod test {
 
     #[test]
     fn test_highlevel_movement_line_ends() {
-        setup_test();
+        test_util::setup_test();
         let mut b = Buffer::new_empty();
         let vp = Viewport::new_ginormeous();
         b.insert_at_carets("hello");
@@ -392,7 +445,7 @@ mod test {
 
     #[test]
     fn test_highlevel_movement_viewport() {
-        setup_test();
+        test_util::setup_test();
         let mut b = Buffer::new_empty();
         let mut vp = Viewport {
             first_line: 1,
@@ -401,15 +454,76 @@ mod test {
         b.insert_at_carets("0000\n1111\n2222\n3333\n4444");
         b.apply_movement_op(&vp, MovementOp::Up);
         b.apply_movement_op(&vp, MovementOp::Up);
-        assert_eq!(2, b.all_carets().first().line);
+        assert_eq!(2, b.all_caret_positions().first().line);
         b.apply_movement_op(&vp, MovementOp::TopOfViewport);
-        assert_eq!(1, b.all_carets().first().line);
+        assert_eq!(1, b.all_caret_positions().first().line);
         b.apply_movement_op(&vp, MovementOp::BottomOfViewport);
-        assert_eq!(3, b.all_carets().first().line);
+        assert_eq!(3, b.all_caret_positions().first().line);
 
         // verify we don't die if the bottom of the viewport is below the last line
         vp.height = 100;
         b.apply_movement_op(&vp, MovementOp::BottomOfViewport);
-        assert_eq!(4, b.all_carets().first().line);
+        assert_eq!(4, b.all_caret_positions().first().line);
+    }
+
+    #[test]
+    fn test_undo_then_insert() {
+        test_util::setup_test();
+        let mut b = Buffer::new_empty();
+        b.insert_at_carets("hey");
+        b.undo();
+        assert_eq!("", b.content_to_string());
+        assert_eq!(0, b.all_caret_positions().first().to_offset(&b.text));
+        b.insert_at_carets("hello");
+        assert_eq!("hello", b.content_to_string());
+    }
+
+    #[test]
+    fn test_undo_redo() {
+        test_util::setup_test();
+        let mut b = Buffer::new_empty();
+        b.undo();
+        assert_eq!("", b.content_to_string());
+        b.insert_at_carets("hey");
+        b.delete_backward_at_carets();
+        b.insert_at_carets("llo");
+        b.insert_at_carets(" world");
+        assert_eq!("hello world", b.content_to_string());
+        b.undo();
+        assert_eq!("he", b.content_to_string());
+        b.undo();
+        assert_eq!("hey", b.content_to_string());
+        b.undo();
+        assert_eq!("", b.content_to_string());
+        b.undo();
+        assert_eq!("", b.content_to_string());
+
+        b.redo();
+        assert_eq!("hey", b.content_to_string());
+        b.undo();
+        assert_eq!("", b.content_to_string());
+        b.redo();
+        assert_eq!("hey", b.content_to_string());
+        b.redo();
+        assert_eq!("he", b.content_to_string());
+        b.redo();
+        assert_eq!("hello world", b.content_to_string());
+    }
+
+    #[test]
+    fn test_undo_edit_redo() {
+        test_util::setup_test();
+        let mut b = Buffer::new_empty();
+        b.undo();
+        assert_eq!("", b.content_to_string());
+        b.insert_at_carets("hey");
+        b.delete_backward_at_carets();
+        b.insert_at_carets("llo");
+        assert_eq!("hello", b.content_to_string());
+        b.undo();
+        b.insert_at_carets("yho");
+        assert_eq!("heyho", b.content_to_string());
+        b.redo();
+        assert_eq!("heyho", b.content_to_string());
     }
 }
