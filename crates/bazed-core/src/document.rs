@@ -79,7 +79,7 @@ impl Document {
             text: lines,
             carets: self
                 .buffer
-                .all_carets()
+                .all_caret_positions()
                 .map(|x| CaretPosition {
                     line: x.line,
                     col: x.col,

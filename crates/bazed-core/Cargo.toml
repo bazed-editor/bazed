@@ -22,3 +22,6 @@ tracing.workspace = true
 derive_more.workspace = true
 maplit.workspace = true
 tap.workspace = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
