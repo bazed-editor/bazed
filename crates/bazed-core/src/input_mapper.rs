@@ -8,6 +8,7 @@ pub(crate) fn interpret_key_input(input: &KeyInput) -> Option<Operation> {
     if input.ctrl_held() {
         match input.key {
             Key::Char('z') => Some(Operation::Edit(EditOp::Undo)),
+            Key::Char('y') => Some(Operation::Edit(EditOp::Redo)),
             Key::Char('s') => Some(Operation::Document(DocumentOp::Save)),
             _ => None,
         }

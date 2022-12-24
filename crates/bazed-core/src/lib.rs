@@ -7,3 +7,6 @@ mod input_mapper;
 pub mod mark;
 mod user_buffer_op;
 pub mod view;
+
+#[cfg(test)]
+mod test_util;
