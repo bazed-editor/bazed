@@ -148,13 +148,14 @@ impl Buffer {
         tracing::debug!("Committing delta");
         self.marks.apply_delta(&delta);
 
-        let head_rev = self.engine.get_head_rev_id();
-        let undo_group = self
-            .undo_history
-            .perform_edit(self.last_edit_type != edit_type);
+        if self.last_edit_type != edit_type {
+            self.undo_history.start_new_undo_group();
+        }
+        let undo_group = self.undo_history.calculate_undo_id();
         tracing::trace!(undo_group, "determined undo group id");
         self.last_edit_type = edit_type;
 
+        let head_rev = self.engine.get_head_rev_id();
         self.engine.edit_rev(1, undo_group, head_rev.token(), delta);
 
         self.text = self.engine.get_head().clone();
@@ -219,11 +220,7 @@ impl Buffer {
     }
 
     fn redo(&mut self) {
-        tracing::trace!(
-            currently_undone = ?self.undo_history.currently_undone(),
-            current_undo_group_id = ?self.undo_history.current_undo_group_id(),
-            "before redo",
-        );
+        tracing::trace!(history = ?self.undo_history, "before redo");
         if self.undo_history.redo() {
             self.last_edit_type = EditType::Other;
             let old_head_rev = self.engine.get_head_rev_id();
@@ -240,11 +237,7 @@ impl Buffer {
                 },
             }
         }
-        tracing::trace!(
-            currently_undone = ?self.undo_history.currently_undone(),
-            current_undo_group_id = ?self.undo_history.current_undo_group_id(),
-            "after redo",
-        );
+        tracing::trace!(history = ?self.undo_history, "after redo");
     }
 
     pub(crate) fn apply_edit_op(&mut self, op: EditOp) {
