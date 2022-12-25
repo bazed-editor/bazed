@@ -12,8 +12,8 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
-  test:
-    name: Rust
+  rust-tests:
+    name: Rust tests
     runs-on: ubuntu-latest
 
     steps:
@@ -26,3 +26,18 @@ jobs:
       run: cargo test --workspace --all-features --no-run
     - name: Run tests
       run: cargo test --workspace --all-features
+
+  rehuko-lint:
+    name: Svelte formatting test
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install npm packages
+      run: |-
+        cd rekuho
+        npm ci
+    - name: Lint
+      run: |-
+        cd rekuho
+        npm run lint
