@@ -1,12 +1,14 @@
 <!--
-    Portion, may be simply the Editor
-    This window contains the visible and editable text.
+  Portion, may be simply the Editor
+  This window contains the visible and editable text.
 -->
+
 <script lang="ts">
   import type { Theme } from "./Theme"
   import LinesView, { lines, isAlpha, insertAt } from "./LinesView.svelte"
   import type { Position } from "./Cursors.svelte"
   import CursorsLayer, { cursors, cursorUpdate, cursorMove } from "./Cursors.svelte"
+  import { measure as fontMeasure } from "./Font"
 
   export let theme: Theme
   const gutter_width = 50 // maybe should be part of theme, minimum value?
@@ -28,17 +30,6 @@
 
   // let portion_start_line: number = 0
 
-  const getCharacterWidth = (font: string): number | null => {
-    const canvas = new OffscreenCanvas(0, 0)
-    const context = canvas.getContext("2d") as OffscreenCanvasRenderingContext2D | null
-    if (context) {
-      context.font = font
-    }
-    // FIXME: elkowar mentioned: "with a font of **ZERO WIDTH X-CHARACTERS**" this breaks.
-    // It does. ture. (typo intended)
-    return context?.measureText("X").width || null
-  }
-
   // TODO: separate into linear_algebra.ts
   $: view_rect = container && container.getBoundingClientRect()
   const pxToPortionPosition = ([x, y]: Position): Position => {
@@ -49,8 +40,9 @@
   }
 
   const font = theme.font
-  const line_height: number = 18
-  const column_width: number = getCharacterWidth(`${font.weight} ${font.size} ${font.family}`) || 1
+  const font_metrics = fontMeasure(`${font.weight} ${font.size} ${font.family}`)
+  const line_height: number = font_metrics.actualHeight || 0
+  const column_width: number = font_metrics.width || 0
 
   // TODO: implement selections
   let selection: Position | null = null
