@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 /// redo              => id = 3, history = [0, 1, 2, 3   ], idx = 2, undone = { 3 }
 /// edit[new_group=t] => id = 4, history = [0, 1, 2,    4], idx = 3, undone = { 3 }
 /// ```
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(super) struct UndoHistory {
     /// The undo group id that current undos will be grouped under.
     /// As long as edits don't break this undo group, this will stay the same.
@@ -127,31 +127,37 @@ mod test {
         };
     }
 
+    /// assert history state with a defined syntax to make tests prettier
+    macro_rules! assert_hist {
+        ($h:expr,
+            gid = $gid:expr,
+            idx = $idx:expr,
+            history = [$($hist:expr),*],
+            undone = [$($undone:expr),*]
+        ) => {
+            assert_eq!(
+                UndoHistory {
+                    cur_undo_gid: $gid,
+                    history: vec![$($hist),*],
+                    cur_history_idx: $idx,
+                    currently_undone: set![$($undone),*],
+                },
+                $h
+            )
+        };
+    }
+
     #[test]
     fn test_update_history() {
         test_util::setup_test();
         let mut h = UndoHistory::default();
-        assert_eq!(0, h.current_undo_group_id());
-        assert!(h.currently_undone().is_empty());
-        assert_eq!(0, h.cur_history_idx);
-        assert_eq!(vec![0], h.history);
-
+        assert_hist!(h, gid = 0, idx = 0, history = [0], undone = []);
         h.perform_edit(true);
-        assert_eq!(1, h.current_undo_group_id());
-        assert!(h.currently_undone().is_empty());
-        assert_eq!(1, h.cur_history_idx);
-        assert_eq!(vec![0, 1], h.history);
-
+        assert_hist!(h, gid = 1, idx = 1, history = [0, 1], undone = []);
         h.perform_edit(false);
-        assert_eq!(1, h.current_undo_group_id());
-        assert!(h.currently_undone().is_empty());
-        assert_eq!(1, h.cur_history_idx);
-        assert_eq!(vec![0, 1], h.history);
-
-        assert_eq!(2, h.perform_edit(true));
-        assert!(h.currently_undone().is_empty());
-        assert_eq!(2, h.cur_history_idx);
-        assert_eq!(vec![0, 1, 2], h.history);
+        assert_hist!(h, gid = 1, idx = 1, history = [0, 1], undone = []);
+        h.perform_edit(true);
+        assert_hist!(h, gid = 2, idx = 2, history = [0, 1, 2], undone = []);
     }
 
     #[test]
@@ -160,20 +166,11 @@ mod test {
         let mut h = UndoHistory::default();
         h.perform_edit(true);
         h.perform_edit(true);
-        assert_eq!(2, h.current_undo_group_id());
-        assert_eq!(vec![0, 1, 2], h.history);
-        assert_eq!(2, h.cur_history_idx);
-
+        assert_hist!(h, gid = 2, idx = 2, history = [0, 1, 2], undone = []);
         assert!(h.undo());
-        assert_eq!(2, h.current_undo_group_id());
-        assert_eq!(&set![2], h.currently_undone());
-        assert_eq!(vec![0, 1, 2], h.history);
-        assert_eq!(1, h.cur_history_idx);
+        assert_hist!(h, gid = 2, idx = 1, history = [0, 1, 2], undone = [2]);
         assert!(h.undo());
-        assert_eq!(2, h.current_undo_group_id());
-        assert_eq!(&set![1, 2], h.currently_undone());
-        assert_eq!(vec![0, 1, 2], h.history);
-        assert_eq!(0, h.cur_history_idx);
+        assert_hist!(h, gid = 2, idx = 0, history = [0, 1, 2], undone = [1, 2]);
     }
 
     #[test]
@@ -181,9 +178,7 @@ mod test {
         test_util::setup_test();
         let mut h = UndoHistory::default();
         assert!(!h.undo());
-        assert_eq!(0, h.current_undo_group_id());
-        assert!(h.currently_undone().is_empty());
-        assert_eq!(vec![0], h.history);
+        assert_hist!(h, gid = 0, idx = 0, history = [0], undone = []);
     }
 
     #[test]
@@ -195,9 +190,7 @@ mod test {
         // True or false should not matter here, as we should _always_ create a new
         // group when working off of a past state
         h.perform_edit(false);
-        assert_eq!(2, h.current_undo_group_id());
-        assert_eq!(&set![1], h.currently_undone());
-        assert_eq!(vec![0, 2], h.history);
+        assert_hist!(h, gid = 2, idx = 1, history = [0, 2], undone = [1]);
     }
 
     #[test]
@@ -206,9 +199,7 @@ mod test {
         let mut h = UndoHistory::default();
         h.perform_edit(true);
         assert!(!h.redo());
-        assert_eq!(1, h.current_undo_group_id());
-        assert_eq!(vec![0, 1], h.history);
-        assert!(h.currently_undone().is_empty());
+        assert_hist!(h, gid = 1, idx = 1, history = [0, 1], undone = []);
     }
 
     #[test]
@@ -217,11 +208,8 @@ mod test {
         let mut h = UndoHistory::default();
         h.perform_edit(true);
         h.undo();
-        assert_eq!(vec![0, 1], h.history);
-        assert_eq!(0, h.cur_history_idx);
+        assert_hist!(h, gid = 1, idx = 0, history = [0, 1], undone = [1]);
         assert!(h.redo());
-        assert_eq!(1, h.current_undo_group_id());
-        assert!(h.currently_undone().is_empty());
-        assert_eq!(vec![0, 1], h.history);
+        assert_hist!(h, gid = 1, idx = 1, history = [0, 1], undone = []);
     }
 }
