@@ -6,45 +6,49 @@ use xi_rope::{engine::Engine, tree::NodeInfo, DeltaBuilder, Rope, RopeDelta, Tra
 
 use self::undo_history::UndoHistory;
 use crate::{
-    mark::{Mark, MarkId},
+    region::{Region, RegionId},
     user_buffer_op::{EditOp, EditType, MovementOp},
     view::Viewport,
 };
 
 mod undo_history;
 
-/// Stores all the active marks in a buffer.
+/// Stores all the active regions in a buffer.
 ///
 /// Terminology:
-/// - *Mark* refers to any marked position in the buffer
-/// - *Caret* refers to marks that represent concrete, user-controlled carets.
+/// - *Region* refers to any region in the buffer
+/// - *Cursor* refers to any region of length 0
+/// - *Selection* refers to regions that represent concrete, user-controlled selections
+/// - *Caret* refers to regions that represent concrete, user-controlled carets.
 ///   (i.e.: The places where text gets inserted)
+///   Currently this also includes selections.
+///   
 #[derive(Debug)]
-struct BufferMarks {
-    marks: HashMap<MarkId, Mark>,
+struct BufferRegions {
+    regions: HashMap<RegionId, Region>,
     /// All the active carets. There will always be at least one.
     /// The first element may be considered the "primary" caret,
     /// being the caret that will remain when exiting any sort of multi-caret mode.
     ///
-    /// All possible mutating interactions with [BufferMarks] must guarantee
-    /// that all ids stored here continue to actually map to a mark.
-    carets: NonEmpty<MarkId>,
+    /// All possible mutating interactions with [BufferRegions] must guarantee
+    /// that all ids stored here continue to actually map to a region.
+    carets: NonEmpty<RegionId>,
 }
 
-impl Default for BufferMarks {
+impl Default for BufferRegions {
     fn default() -> Self {
-        let primary_caret = Mark::sticky(0);
-        let primary_caret_id = MarkId::gen();
-        let marks = maplit::hashmap! { primary_caret_id => primary_caret };
+        let primary_caret = Region::sticky_cursor(0);
+        let primary_caret_id = RegionId::gen();
+        let regions = maplit::hashmap! { primary_caret_id => primary_caret };
         let carets = nonempty![primary_caret_id];
-        Self { marks, carets }
+        Self { regions, carets }
     }
 }
 
-impl BufferMarks {
+impl BufferRegions {
     fn apply_transformer<N: NodeInfo>(&mut self, trans: &mut Transformer<N>) {
-        for mark in self.marks.values_mut() {
-            mark.apply_transformer(trans);
+        for region in self.regions.values_mut() {
+            region.apply_transformer(trans);
         }
     }
 
@@ -54,21 +58,21 @@ impl BufferMarks {
     }
 
     /// Return all carets in this buffer
-    fn carets(&self) -> NonEmpty<Mark> {
+    fn carets(&self) -> NonEmpty<Region> {
         self.carets
             .iter()
-            .map(|x| *self.marks.get(x).expect("caret not found in marks"))
+            .map(|x| *self.regions.get(x).expect("caret not found in region"))
             .collect::<Vec<_>>()
             .pipe(NonEmpty::from_vec)
             .unwrap()
     }
 
     /// Return an iterator over mutable references to all carets in this buffer
-    fn carets_mut(&mut self) -> impl Iterator<Item = &mut Mark> {
+    fn carets_mut(&mut self) -> impl Iterator<Item = &mut Region> {
         // TODO This is stupid, but iterating over self.carets instead and getting the refs
         // through get_mut doesn't work trivially, as rust can't verify that we won't get multiple
         // mut refs to the same entry as a result of overlapping keys...
-        self.marks
+        self.regions
             .iter_mut()
             .filter(|(k, _)| self.carets.contains(k))
             .map(|(_, v)| v)
@@ -79,7 +83,7 @@ impl BufferMarks {
 pub struct Buffer {
     text: Rope,
     engine: Engine,
-    marks: BufferMarks,
+    regions: BufferRegions,
     undo_history: UndoHistory,
     /// edit type of the most recently performed action, kept for grouping edits into undo-groups
     last_edit_type: EditType,
@@ -91,7 +95,7 @@ impl Buffer {
         Self {
             engine: Engine::new(rope.clone()),
             text: rope,
-            marks: BufferMarks::default(),
+            regions: BufferRegions::default(),
             undo_history: UndoHistory::default(),
             last_edit_type: EditType::Other,
         }
@@ -110,9 +114,9 @@ impl Buffer {
     }
 
     pub fn all_caret_positions(&self) -> NonEmpty<Position> {
-        self.marks
+        self.regions
             .carets()
-            .map(|x| Position::from_offset(&self.text, x.offset))
+            .map(|x| Position::from_offset(&self.text, x.head))
     }
 
     /// get the lines in the given inclusive range
@@ -126,27 +130,26 @@ impl Buffer {
         self.text.lines(..).skip(low).take(high - low)
     }
 
-    /// Snap all marks to the closest valid points in the buffer.
+    /// Snap all regions to the closest valid points in the buffer.
     ///
     /// This may be required if an action (such as undo, currently) changes the buffer
-    /// without moving the marks accordingly. In the future, this should not be required
-    /// as all actions _should_ move all marks properly, either through a coordinate transform
+    /// without moving the regions accordingly. In the future, this should not be required
+    /// as all actions _should_ move all regions properly, either through a coordinate transform
     /// with [xi_rope::Transformer], or, in the case of undo, by remembering where the carets where before.
     ///
     /// **WARNING:** This is very much a temporary solution, as it _will_ cause inconsistent state as soon as we use
-    /// marks for more than just caret position. (see https://github.com/bazed-editor/bazed/issues/47)
-    fn snap_marks_to_valid_position(&mut self) {
-        for mark in self.marks.marks.values_mut() {
-            if mark.offset > self.text.len() {
-                mark.offset = self.text.len();
-            }
+    /// regions for more than just caret position. (see https://github.com/bazed-editor/bazed/issues/47)
+    fn snap_regions_to_valid_position(&mut self) {
+        for region in self.regions.regions.values_mut() {
+            region.head = region.head.min(self.text.len());
+            region.tail = region.tail.min(self.text.len());
         }
     }
 
     #[tracing::instrument(skip(self), fields(head_rev_id = ?self.engine.get_head_rev_id()))]
     fn commit_delta(&mut self, delta: RopeDelta, edit_type: EditType) -> Rope {
         tracing::debug!("Committing delta");
-        self.marks.apply_delta(&delta);
+        self.regions.apply_delta(&delta);
 
         if self.last_edit_type != edit_type {
             self.undo_history.start_new_undo_group();
@@ -170,8 +173,8 @@ impl Buffer {
 
         let mut builder = DeltaBuilder::new(self.text.len());
         let text: Rope = chars.into();
-        for mark in self.marks.carets() {
-            builder.replace(mark, text.clone());
+        for region in self.regions.carets() {
+            builder.replace(region, text.clone());
         }
         let delta = builder.build();
         self.commit_delta(delta, EditType::Insert);
@@ -179,11 +182,11 @@ impl Buffer {
 
     fn delete_backward_at_carets(&mut self) {
         let mut builder = DeltaBuilder::new(self.text.len());
-        for mark in self.marks.carets() {
+        for region in self.regions.carets() {
             // See xi-editors `offset_for_delete_backwards` function in backward.rs...
             // all I'll say is `#[allow(clippy::cognitive_complexity)]`.
-            let delete_start = 1.max(mark.offset) - 1;
-            builder.delete(delete_start..mark.offset);
+            let delete_start = 1.max(region.head) - 1;
+            builder.delete(delete_start..region.head);
         }
         let delta = builder.build();
         self.commit_delta(delta, EditType::Delete);
@@ -205,10 +208,10 @@ impl Buffer {
             self.text = self.engine.get_head().clone();
 
             match self.engine.try_delta_rev_head(old_head_rev.token()) {
-                Ok(delta) => self.marks.apply_delta(&delta),
+                Ok(delta) => self.regions.apply_delta(&delta),
                 Err(err) => {
                     tracing::error!("Error generating delta after undo: {err}");
-                    self.snap_marks_to_valid_position();
+                    self.snap_regions_to_valid_position();
                 },
             }
         }
@@ -230,10 +233,10 @@ impl Buffer {
             self.text = self.engine.get_head().clone();
 
             match self.engine.try_delta_rev_head(old_head_rev.token()) {
-                Ok(delta) => self.marks.apply_delta(&delta),
+                Ok(delta) => self.regions.apply_delta(&delta),
                 Err(err) => {
                     tracing::error!("Error generating delta after redo: {err}");
-                    self.snap_marks_to_valid_position();
+                    self.snap_regions_to_valid_position();
                 },
             }
         }
@@ -250,43 +253,49 @@ impl Buffer {
     }
 
     pub(crate) fn apply_movement_op(&mut self, viewport: &Viewport, op: MovementOp) {
-        for mark in self.marks.carets_mut() {
-            *mark = apply_movement_to_mark(&self.text, viewport, *mark, op);
+        for region in self.regions.carets_mut() {
+            *region = apply_movement_to_region(&self.text, viewport, *region, false, op);
         }
     }
 }
 
-fn apply_movement_to_mark(text: &Rope, vp: &Viewport, mark: Mark, op: MovementOp) -> Mark {
+fn apply_movement_to_region(
+    text: &Rope,
+    vp: &Viewport,
+    region: Region,
+    only_move_head: bool,
+    op: MovementOp,
+) -> Region {
     let offset = match op {
         MovementOp::Left => text
-            .prev_grapheme_offset(mark.offset)
-            .unwrap_or(mark.offset),
+            .prev_grapheme_offset(region.head)
+            .unwrap_or(region.head),
         MovementOp::Right => text
-            .next_grapheme_offset(mark.offset)
-            .unwrap_or(mark.offset),
+            .next_grapheme_offset(region.head)
+            .unwrap_or(region.head),
         MovementOp::Up => {
-            let pos = Position::from_offset(text, mark.offset);
+            let pos = Position::from_offset(text, region.head);
             if pos.line > 0 {
                 pos.with_line(pos.line - 1).to_offset(text)
             } else {
-                mark.offset
+                region.head
             }
         },
         MovementOp::Down => {
-            let pos = Position::from_offset(text, mark.offset);
+            let pos = Position::from_offset(text, region.head);
             let last_line = text.line_of_offset(text.len());
             if pos.line < last_line {
                 pos.with_line(pos.line + 1).to_offset(text)
             } else {
-                mark.offset
+                region.head
             }
         },
         MovementOp::StartOfLine => {
-            let line = text.line_of_offset(mark.offset);
+            let line = text.line_of_offset(region.head);
             text.offset_of_line(line)
         },
         MovementOp::EndOfLine => {
-            let line = text.line_of_offset(mark.offset);
+            let line = text.line_of_offset(region.head);
             let last_line = text.line_of_offset(text.len());
             if line < last_line {
                 text.offset_of_line(line + 1)
@@ -295,23 +304,24 @@ fn apply_movement_to_mark(text: &Rope, vp: &Viewport, mark: Mark, op: MovementOp
             }
         },
         MovementOp::TopOfViewport => {
-            let current_pos = Position::from_offset(text, mark.offset);
+            let current_pos = Position::from_offset(text, region.head);
             current_pos.with_line(vp.first_line).to_offset(text)
         },
         MovementOp::BottomOfViewport => {
-            let current_pos = Position::from_offset(text, mark.offset);
+            let current_pos = Position::from_offset(text, region.head);
             let last_line = text.line_of_offset(text.len());
             let target_line = vp.last_line().min(last_line);
             current_pos.with_line(target_line).to_offset(text)
         },
     };
-    Mark {
-        offset,
-        kind: mark.kind,
+    Region {
+        head: offset,
+        tail: if only_move_head { region.tail } else { offset },
+        stickyness: region.stickyness,
     }
 }
 
-/// Position of a [Mark] in a [Buffer] by it's line and col.
+/// Position in a [Buffer] by it's line and col.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position {
     pub line: usize,
@@ -413,18 +423,18 @@ mod test {
         b.insert_at_carets("hi\nho");
         b.apply_movement_op(&vp, MovementOp::Down);
         b.apply_movement_op(&vp, MovementOp::Down);
-        assert_eq!(b.text.len(), b.marks.carets().first().offset);
+        assert_eq!(b.text.len(), b.regions.carets().first().head);
         b.apply_movement_op(&vp, MovementOp::Right);
         b.apply_movement_op(&vp, MovementOp::Right);
-        assert_eq!(b.text.len(), b.marks.carets().first().offset);
+        assert_eq!(b.text.len(), b.regions.carets().first().head);
         b.apply_movement_op(&vp, MovementOp::Up);
         b.apply_movement_op(&vp, MovementOp::Up);
         b.apply_movement_op(&vp, MovementOp::Up);
-        assert_eq!(2, b.marks.carets().first().offset);
+        assert_eq!(2, b.regions.carets().first().head);
         b.apply_movement_op(&vp, MovementOp::Left);
         b.apply_movement_op(&vp, MovementOp::Left);
         b.apply_movement_op(&vp, MovementOp::Left);
-        assert_eq!(0, b.marks.carets().first().offset);
+        assert_eq!(0, b.regions.carets().first().head);
     }
 
     #[test]
@@ -446,11 +456,11 @@ mod test {
         b.insert_at_carets("hello");
         b.apply_movement_op(&vp, MovementOp::Left);
         b.apply_movement_op(&vp, MovementOp::Left);
-        assert_eq!(3, b.marks.carets().first().offset);
+        assert_eq!(3, b.regions.carets().first().head);
         b.apply_movement_op(&vp, MovementOp::EndOfLine);
-        assert_eq!(5, b.marks.carets().first().offset);
+        assert_eq!(5, b.regions.carets().first().head);
         b.apply_movement_op(&vp, MovementOp::StartOfLine);
-        assert_eq!(0, b.marks.carets().first().offset);
+        assert_eq!(0, b.regions.carets().first().head);
     }
 
     #[test]
