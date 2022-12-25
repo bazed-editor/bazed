@@ -14,8 +14,7 @@ pub(crate) enum EditType {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub(crate) enum Operation {
     Document(DocumentOp),
-    Edit(EditOp),
-    Movement(MovementOp),
+    Buffer(BufferOp),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -24,17 +23,21 @@ pub(crate) enum DocumentOp {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub(crate) enum EditOp {
+pub(crate) enum BufferOp {
     Insert(String),
     Backspace,
     Undo,
     Redo,
+    Move(Motion),
+    /// Expand or change the selection
+    Selection(Motion),
 }
 
-// currently just used in tests
+/// A motion, either character-wise or defined by some higher-level semantic target.
+/// Conceptually similar to motions in vim (`w`, `t$`)
 #[allow(unused)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub(crate) enum MovementOp {
+pub(crate) enum Motion {
     Left,
     Right,
     Up,

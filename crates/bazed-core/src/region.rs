@@ -36,9 +36,13 @@ pub struct Region {
 
 impl Region {
     pub fn sticky_cursor(offset: usize) -> Self {
+        Self::sticky(offset, offset)
+    }
+
+    pub fn sticky(head: usize, tail: usize) -> Self {
         Self {
-            head: offset,
-            tail: offset,
+            head,
+            tail,
             stickyness: Stickyness::Sticky,
         }
     }
