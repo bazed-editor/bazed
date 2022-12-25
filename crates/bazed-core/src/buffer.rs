@@ -7,7 +7,7 @@ use xi_rope::{engine::Engine, tree::NodeInfo, DeltaBuilder, Rope, RopeDelta, Tra
 use self::undo_history::UndoHistory;
 use crate::{
     region::{Region, RegionId},
-    user_buffer_op::{EditOp, EditType, MovementOp},
+    user_buffer_op::{BufferOp, EditType, Motion},
     view::Viewport,
 };
 
@@ -76,6 +76,12 @@ impl BufferRegions {
             .iter_mut()
             .filter(|(k, _)| self.carets.contains(k))
             .map(|(_, v)| v)
+    }
+
+    /// Directly overwrite the primary caret / selection
+    #[cfg(test)]
+    fn set_primary_caret(&mut self, region: Region) {
+        self.regions.insert(*self.carets.first(), region);
     }
 }
 
@@ -243,37 +249,53 @@ impl Buffer {
         tracing::trace!(history = ?self.undo_history, "after redo");
     }
 
-    pub(crate) fn apply_edit_op(&mut self, op: EditOp) {
+    pub(crate) fn apply_buffer_op(&mut self, vp: &Viewport, op: BufferOp) {
+        // TODO How should _any_ of these behave when there is a selection?
+        // Insertion should replace, backspace should delete, etc. How do we implement that cleanly?
         match op {
-            EditOp::Insert(text) => self.insert_at_carets(&text),
-            EditOp::Backspace => self.delete_backward_at_carets(),
-            EditOp::Undo => self.undo(),
-            EditOp::Redo => self.redo(),
+            BufferOp::Insert(text) => self.insert_at_carets(&text),
+            BufferOp::Backspace => self.delete_backward_at_carets(),
+            BufferOp::Undo => self.undo(),
+            BufferOp::Redo => self.redo(),
+            BufferOp::Move(motion) => {
+                // TODO is this the strat?
+                // Do we just discard selections when moving without BufferOp::Selection?
+                self.move_carets(vp, motion);
+            },
+            BufferOp::Selection(motion) => {
+                for region in self.regions.carets_mut() {
+                    *region = apply_motion_to_region(&self.text, vp, *region, true, motion);
+                }
+            },
         }
     }
 
-    pub(crate) fn apply_movement_op(&mut self, viewport: &Viewport, op: MovementOp) {
+    /// Move carets by a given motion, collapsing any selections down into carets.
+    pub(crate) fn move_carets(&mut self, viewport: &Viewport, motion: Motion) {
         for region in self.regions.carets_mut() {
-            *region = apply_movement_to_region(&self.text, viewport, *region, false, op);
+            *region = apply_motion_to_region(&self.text, viewport, *region, false, motion);
         }
     }
 }
 
-fn apply_movement_to_region(
+/// Apply a given motion to a region.
+/// if `only_move_head` is false, the tail of the region gets set to the new head,
+/// collapsing it into a cursor.
+fn apply_motion_to_region(
     text: &Rope,
     vp: &Viewport,
     region: Region,
     only_move_head: bool,
-    op: MovementOp,
+    op: Motion,
 ) -> Region {
     let offset = match op {
-        MovementOp::Left => text
+        Motion::Left => text
             .prev_grapheme_offset(region.head)
             .unwrap_or(region.head),
-        MovementOp::Right => text
+        Motion::Right => text
             .next_grapheme_offset(region.head)
             .unwrap_or(region.head),
-        MovementOp::Up => {
+        Motion::Up => {
             let pos = Position::from_offset(text, region.head);
             if pos.line > 0 {
                 pos.with_line(pos.line - 1).to_offset(text)
@@ -281,7 +303,7 @@ fn apply_movement_to_region(
                 region.head
             }
         },
-        MovementOp::Down => {
+        Motion::Down => {
             let pos = Position::from_offset(text, region.head);
             let last_line = text.line_of_offset(text.len());
             if pos.line < last_line {
@@ -290,11 +312,11 @@ fn apply_movement_to_region(
                 region.head
             }
         },
-        MovementOp::StartOfLine => {
+        Motion::StartOfLine => {
             let line = text.line_of_offset(region.head);
             text.offset_of_line(line)
         },
-        MovementOp::EndOfLine => {
+        Motion::EndOfLine => {
             let line = text.line_of_offset(region.head);
             let last_line = text.line_of_offset(text.len());
             if line < last_line {
@@ -303,11 +325,11 @@ fn apply_movement_to_region(
                 text.len()
             }
         },
-        MovementOp::TopOfViewport => {
+        Motion::TopOfViewport => {
             let current_pos = Position::from_offset(text, region.head);
             current_pos.with_line(vp.first_line).to_offset(text)
         },
-        MovementOp::BottomOfViewport => {
+        Motion::BottomOfViewport => {
             let current_pos = Position::from_offset(text, region.head);
             let last_line = text.line_of_offset(text.len());
             let target_line = vp.last_line().min(last_line);
@@ -380,6 +402,16 @@ mod test {
     }
 
     #[test]
+    fn test_insert_at_selection() {
+        test_util::setup_test();
+        let mut b = Buffer::new_empty();
+        b.insert_at_carets("hello");
+        b.regions.set_primary_caret(Region::sticky(1, 3));
+        b.insert_at_carets("X");
+        assert_eq!("hXlo", b.content_to_string());
+    }
+
+    #[test]
     fn test_backspace() {
         test_util::setup_test();
         let mut b = Buffer::new_empty();
@@ -387,6 +419,17 @@ mod test {
         assert_eq!("a", b.content_to_string());
         b.delete_backward_at_carets();
         assert_eq!("", b.content_to_string());
+    }
+
+    /// For now, `delete_backwards_at_carets` collapses selections into cursors,
+    /// and then backspaces as usual. Not sure if this is the behavior we want...
+    #[test]
+    fn test_backspace_selection() {
+        test_util::setup_test();
+        let mut b = Buffer::new_from_string("hello".to_string());
+        b.regions.set_primary_caret(Region::sticky(1, 3));
+        b.delete_backward_at_carets();
+        assert_eq!("ello", b.content_to_string());
     }
 
     #[test]
@@ -398,20 +441,42 @@ mod test {
     }
 
     #[test]
+    fn test_move_caret_selecting() {
+        test_util::setup_test();
+        let mut b = Buffer::new_from_string("hello, world".to_string());
+        let vp = Viewport::new_ginormeous();
+        b.apply_buffer_op(&vp, BufferOp::Selection(Motion::Right));
+        b.apply_buffer_op(&vp, BufferOp::Selection(Motion::Right));
+        assert_eq!((0, 2), b.regions.carets().first().range());
+    }
+
+    #[test]
+    fn test_move_collapses_selection() {
+        test_util::setup_test();
+        let mut b = Buffer::new_from_string("hello, world".to_string());
+        let vp = Viewport::new_ginormeous();
+        b.apply_buffer_op(&vp, BufferOp::Selection(Motion::Right));
+        b.apply_buffer_op(&vp, BufferOp::Selection(Motion::Right));
+        assert_eq!((0, 2), b.regions.carets().first().range());
+        b.apply_buffer_op(&vp, BufferOp::Move(Motion::Right));
+        assert_eq!((3, 3), b.regions.carets().first().range());
+    }
+
+    #[test]
     fn test_move_caret_empty() {
         test_util::setup_test();
         let mut b = Buffer::new_empty();
         let vp = Viewport::new_ginormeous();
         // An empty file doesn't allow much movement...
         // Let's hope we don't break the walls
-        b.apply_movement_op(&vp, MovementOp::Left);
-        b.apply_movement_op(&vp, MovementOp::Right);
-        b.apply_movement_op(&vp, MovementOp::Down);
-        b.apply_movement_op(&vp, MovementOp::Up);
-        b.apply_movement_op(&vp, MovementOp::StartOfLine);
-        b.apply_movement_op(&vp, MovementOp::EndOfLine);
-        b.apply_movement_op(&vp, MovementOp::TopOfViewport);
-        b.apply_movement_op(&vp, MovementOp::BottomOfViewport);
+        b.move_carets(&vp, Motion::Left);
+        b.move_carets(&vp, Motion::Right);
+        b.move_carets(&vp, Motion::Down);
+        b.move_carets(&vp, Motion::Up);
+        b.move_carets(&vp, Motion::StartOfLine);
+        b.move_carets(&vp, Motion::EndOfLine);
+        b.move_carets(&vp, Motion::TopOfViewport);
+        b.move_carets(&vp, Motion::BottomOfViewport);
     }
 
     #[test]
@@ -421,19 +486,19 @@ mod test {
         let vp = Viewport::new_ginormeous();
         // Let's just spam moving into the walls and see if it breaks
         b.insert_at_carets("hi\nho");
-        b.apply_movement_op(&vp, MovementOp::Down);
-        b.apply_movement_op(&vp, MovementOp::Down);
+        b.move_carets(&vp, Motion::Down);
+        b.move_carets(&vp, Motion::Down);
         assert_eq!(b.text.len(), b.regions.carets().first().head);
-        b.apply_movement_op(&vp, MovementOp::Right);
-        b.apply_movement_op(&vp, MovementOp::Right);
+        b.move_carets(&vp, Motion::Right);
+        b.move_carets(&vp, Motion::Right);
         assert_eq!(b.text.len(), b.regions.carets().first().head);
-        b.apply_movement_op(&vp, MovementOp::Up);
-        b.apply_movement_op(&vp, MovementOp::Up);
-        b.apply_movement_op(&vp, MovementOp::Up);
+        b.move_carets(&vp, Motion::Up);
+        b.move_carets(&vp, Motion::Up);
+        b.move_carets(&vp, Motion::Up);
         assert_eq!(2, b.regions.carets().first().head);
-        b.apply_movement_op(&vp, MovementOp::Left);
-        b.apply_movement_op(&vp, MovementOp::Left);
-        b.apply_movement_op(&vp, MovementOp::Left);
+        b.move_carets(&vp, Motion::Left);
+        b.move_carets(&vp, Motion::Left);
+        b.move_carets(&vp, Motion::Left);
         assert_eq!(0, b.regions.carets().first().head);
     }
 
@@ -443,7 +508,7 @@ mod test {
         let mut b = Buffer::new_empty();
         let vp = Viewport::new_ginormeous();
         b.insert_at_carets("hi\nworld");
-        b.apply_movement_op(&vp, MovementOp::Up);
+        b.move_carets(&vp, Motion::Up);
         b.insert_at_carets(",");
         assert_eq!("hi,\nworld", b.content_to_string());
     }
@@ -454,12 +519,12 @@ mod test {
         let mut b = Buffer::new_empty();
         let vp = Viewport::new_ginormeous();
         b.insert_at_carets("hello");
-        b.apply_movement_op(&vp, MovementOp::Left);
-        b.apply_movement_op(&vp, MovementOp::Left);
+        b.move_carets(&vp, Motion::Left);
+        b.move_carets(&vp, Motion::Left);
         assert_eq!(3, b.regions.carets().first().head);
-        b.apply_movement_op(&vp, MovementOp::EndOfLine);
+        b.move_carets(&vp, Motion::EndOfLine);
         assert_eq!(5, b.regions.carets().first().head);
-        b.apply_movement_op(&vp, MovementOp::StartOfLine);
+        b.move_carets(&vp, Motion::StartOfLine);
         assert_eq!(0, b.regions.carets().first().head);
     }
 
@@ -472,17 +537,17 @@ mod test {
             height: 2,
         };
         b.insert_at_carets("0000\n1111\n2222\n3333\n4444");
-        b.apply_movement_op(&vp, MovementOp::Up);
-        b.apply_movement_op(&vp, MovementOp::Up);
+        b.move_carets(&vp, Motion::Up);
+        b.move_carets(&vp, Motion::Up);
         assert_eq!(2, b.all_caret_positions().first().line);
-        b.apply_movement_op(&vp, MovementOp::TopOfViewport);
+        b.move_carets(&vp, Motion::TopOfViewport);
         assert_eq!(1, b.all_caret_positions().first().line);
-        b.apply_movement_op(&vp, MovementOp::BottomOfViewport);
+        b.move_carets(&vp, Motion::BottomOfViewport);
         assert_eq!(3, b.all_caret_positions().first().line);
 
         // verify we don't die if the bottom of the viewport is below the last line
         vp.height = 100;
-        b.apply_movement_op(&vp, MovementOp::BottomOfViewport);
+        b.move_carets(&vp, Motion::BottomOfViewport);
         assert_eq!(4, b.all_caret_positions().first().line);
     }
 
@@ -506,7 +571,7 @@ mod test {
         b.insert_at_carets("heyy");
         b.delete_backward_at_carets();
         b.insert_at_carets("\nho");
-        b.apply_movement_op(&vp, MovementOp::Up);
+        b.move_carets(&vp, Motion::Up);
         b.undo();
         assert_eq!(
             &Position { line: 0, col: 2 },
