@@ -134,7 +134,7 @@ impl Buffer {
     /// with [xi_rope::Transformer], or, in the case of undo, by remembering where the carets where before.
     ///
     /// **WARNING:** This is very much a temporary solution, as it _will_ cause inconsistent state as soon as we use
-    /// marks for more than just caret position.
+    /// marks for more than just caret position. (see https://github.com/bazed-editor/bazed/issues/47)
     fn snap_marks_to_valid_position(&mut self) {
         for mark in self.marks.marks.values_mut() {
             if mark.offset > self.text.len() {
@@ -196,11 +196,20 @@ impl Buffer {
         );
         if self.undo_history.undo() {
             self.last_edit_type = EditType::Other;
+
+            let old_head_rev = self.engine.get_head_rev_id();
+
             self.engine
                 .undo(self.undo_history.currently_undone().clone());
             self.text = self.engine.get_head().clone();
-            // TODO (https://github.com/bazed-editor/bazed/issues/47) properly handle marks in undo
-            self.snap_marks_to_valid_position();
+
+            match self.engine.try_delta_rev_head(old_head_rev.token()) {
+                Ok(delta) => self.marks.apply_delta(&delta),
+                Err(err) => {
+                    tracing::error!("Error generating delta after undo: {err}");
+                    self.snap_marks_to_valid_position();
+                },
+            }
         }
         tracing::trace!(
             history = ?self.undo_history,
@@ -217,11 +226,19 @@ impl Buffer {
         );
         if self.undo_history.redo() {
             self.last_edit_type = EditType::Other;
+            let old_head_rev = self.engine.get_head_rev_id();
+
             self.engine
                 .undo(self.undo_history.currently_undone().clone());
             self.text = self.engine.get_head().clone();
-            // TODO (https://github.com/bazed-editor/bazed/issues/47) properly handle marks in undo
-            self.snap_marks_to_valid_position();
+
+            match self.engine.try_delta_rev_head(old_head_rev.token()) {
+                Ok(delta) => self.marks.apply_delta(&delta),
+                Err(err) => {
+                    tracing::error!("Error generating delta after redo: {err}");
+                    self.snap_marks_to_valid_position();
+                },
+            }
         }
         tracing::trace!(
             currently_undone = ?self.undo_history.currently_undone(),
@@ -476,6 +493,32 @@ mod test {
         assert_eq!(0, b.all_caret_positions().first().to_offset(&b.text));
         b.insert_at_carets("hello");
         assert_eq!("hello", b.content_to_string());
+    }
+
+    #[test]
+    fn test_undo_caret_stays_when_before_affected_text() {
+        test_util::setup_test();
+        let mut b = Buffer::new_empty();
+        let vp = Viewport::new_ginormeous();
+        b.insert_at_carets("heyy");
+        b.delete_backward_at_carets();
+        b.insert_at_carets("\nho");
+        b.apply_movement_op(&vp, MovementOp::Up);
+        b.undo();
+        assert_eq!(
+            &Position { line: 0, col: 2 },
+            b.all_caret_positions().first()
+        );
+    }
+    #[test]
+    fn test_undo_caret_moves_when_after_affected_text() {
+        test_util::setup_test();
+        let mut b = Buffer::new_empty();
+        b.insert_at_carets("heyy");
+        b.delete_backward_at_carets();
+        b.insert_at_carets("ho");
+        b.undo();
+        assert_eq!(3, b.all_caret_positions().first().col);
     }
 
     #[test]
