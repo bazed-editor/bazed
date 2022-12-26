@@ -1,5 +1,5 @@
 import { v4 } from "uuid"
-import { state, updateState, type CaretPosition, type State } from "./Core"
+import { state, updateState, type CaretPosition, type State } from "./core"
 
 function ensureExhaustive(_: never) {}
 
