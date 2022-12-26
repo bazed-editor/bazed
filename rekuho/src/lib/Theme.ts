@@ -21,7 +21,7 @@ export type Theme = {
 
 import kanagawa from "./kanagawa"
 
-export let example: Theme = {
+export const example: Theme = {
   font: {
     family: "monospace",
     weight: "normal",
