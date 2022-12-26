@@ -2,7 +2,7 @@
 
 use bazed_rpc::keycode::{Key, KeyInput};
 
-use crate::user_buffer_op::{BufferOp, DocumentOp, Motion, Operation};
+use crate::user_buffer_op::{BufferOp, DocumentOp, Motion, Operation, Trajectory};
 
 pub(crate) fn interpret_key_input(input: &KeyInput) -> Option<Operation> {
     if input.ctrl_held() {
@@ -20,7 +20,8 @@ pub(crate) fn interpret_key_input(input: &KeyInput) -> Option<Operation> {
                 Buffer(BufferOp::Insert(c.to_ascii_lowercase().to_string()))
             },
             Key::Char(c) => Buffer(BufferOp::Insert(c.to_string())),
-            Key::Backspace => Buffer(BufferOp::Backspace),
+            Key::Backspace => Buffer(BufferOp::Delete(Trajectory::Backwards)),
+            Key::Delete => Buffer(BufferOp::Delete(Trajectory::Forwards)),
             // TODO we'll probably need to special-case this
             Key::Return => Buffer(BufferOp::Insert("\n".to_string())),
             // TODO we'll _definitely_ need to special case this for soft tabs
