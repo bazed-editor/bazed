@@ -3,15 +3,11 @@
   This window contains the visible and editable text.
 -->
 <script lang="ts">
-  import type { Theme } from "./Theme"
-  import LinesView from "./LinesView.svelte"
-  import CursorsLayer from "./Cursors.svelte"
-  import { measure as fontMeasure } from "./Font"
-  import { state, type CaretPosition } from "./Core"
-  import type { Vector2 } from "./LinearAlgebra"
-  import type { Key, KeyInput, Modifier } from "./Rpc"
-
-  const gutter_width = 50 // maybe should be part of theme, minimum value?
+  import type { Theme } from "./theme"
+  import { measure as fontMeasure } from "./font"
+  import { state, type CaretPosition } from "./core"
+  import type { Vector2 } from "./linearAlgebra"
+  import type { Key, KeyInput, Modifier } from "./rpc"
 
   export let theme: Theme
   export let height: number
@@ -20,10 +16,12 @@
   export let onKeyInput: (k: KeyInput) => void
   export let onMouseClicked: (pos: CaretPosition) => void
 
+  const gutter_width = 50 // maybe should be part of theme, minimum value?
   let input: HTMLTextAreaElement
   let container: Element
 
-  // TODO: separate into linear_algebra.ts
+  const emitKeyboardInput = (key: Key) => onKeyInput({ modifiers: [], key })
+
   $: view_rect = container && container.getBoundingClientRect()
 
   const pxToPortionPosition = ([x, y]: Vector2): Vector2 => {
@@ -116,12 +114,29 @@
 
   ////////////////////////////////////////////////////////////////////////////////
 
+  const transformToScreenPosition = ([x, y]: Vector2): Vector2 => [
+    x * column_width,
+    y * line_height,
+  ]
+
+  const longestLine = (text: string[]): string =>
+    text.length === 0 ? "" : text.reduce((a, b) => (a.length < b.length ? b : a))
+
+  let linesHeight: number
+  let linesWidth: number
+
+  $: linesHeight = lines.length * line_height
+  $: linesWidth = lines ? longestLine(lines).length : 1
+
   let line_view_height: number
   let line_view_width: number
 
   $: text_view_width = width - gutter_width
   $: text_to_visible_ratio = (line_view_width * column_width - theme.text_offset) / width
   $: vertical_scroller_width = text_view_width / text_to_visible_ratio
+
+  let cursors: CaretPosition[] = []
+  cursors = $state.carets
 </script>
 
 <div
@@ -181,19 +196,42 @@
       style:position="absolute"
       style:width="{column_width}px"
     />
-    <LinesView
-      bind:theme
-      bind:height={line_view_height}
-      bind:width={line_view_width}
-      lines={$state.lines}
-      {line_height}
-    />
-    <CursorsLayer
-      bind:theme
-      cursors={$state.carets}
-      {column_width}
-      {line_height}
-    />
+    <div class="lines-container">
+      {#each lines as line, i}
+        <div
+          class="line-container"
+          style:top="{i * line_height}px"
+          style:height="{line_height}px"
+        >
+          <span
+            class="line-view"
+            style:font-family={theme.font.family}
+            style:font-size={theme.font.size}
+            style:color={theme.text_color}
+            style:height="{line_height}px"
+            style:line-height="{line_height}px"
+          >
+            {line}
+          </span>
+        </div>
+      {/each}
+    </div>
+
+    <div class="cursors-layer">
+      {#each cursors as { line, col }, i}
+        {@const [x, y] = transformToScreenPosition([col, line])}
+        <div
+          class="cursor"
+          id="cursor-{i}"
+          style:visibility="inherit"
+          style:width="{column_width}px"
+          style:height="{line_height}px"
+          style:background={theme.primary_cursor_color}
+          style:left="{x}px"
+          style:top="{y}px"
+        />
+      {/each}
+    </div>
   </div>
 
   <!-- TODO: Implement scrollbars -->
@@ -252,5 +290,19 @@
 
     width: 0;
     height: 0;
+  }
+
+  .lines-container {
+    position: absolute;
+  }
+
+  .line-container {
+    position: absolute;
+    width: 100%;
+    cursor: text;
+  }
+
+  .line-view {
+    white-space: pre;
   }
 </style>
