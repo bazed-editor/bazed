@@ -2,7 +2,6 @@
     Portion, may be simply the Editor
     This window contains the visible and editable text.
 -->
-
 <script lang="ts">
   import type { Theme } from "./Theme"
   import LinesView, { lines, isAlpha, insertAt } from "./LinesView.svelte"
