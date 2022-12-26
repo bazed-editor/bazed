@@ -2,6 +2,12 @@
 //! This includes edit and movement operations.
 //! These will occur at the caret positions, and are thus only used for directly userfacing operations
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum Trajectory {
+    Forwards,
+    Backwards,
+}
+
 /// Category of an edit, used for grouping operations into undo-groups
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum EditType {
@@ -25,7 +31,7 @@ pub(crate) enum DocumentOp {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub(crate) enum BufferOp {
     Insert(String),
-    Backspace,
+    Delete(Trajectory),
     Undo,
     Redo,
     Move(Motion),
