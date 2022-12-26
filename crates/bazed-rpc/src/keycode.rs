@@ -13,7 +13,6 @@ impl KeyInput {
     pub fn shift_held(&self) -> bool {
         self.modifiers.contains(&Modifier::Shift)
     }
-
     pub fn ctrl_held(&self) -> bool {
         self.modifiers.contains(&Modifier::Ctrl)
     }

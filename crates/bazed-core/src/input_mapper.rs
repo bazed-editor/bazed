@@ -14,30 +14,37 @@ pub(crate) fn interpret_key_input(input: &KeyInput) -> Option<Operation> {
         }
     } else {
         use Operation::*;
+
         // for now we just ignore the fact that other modifiers like Alt and Win exist.
-        let op = match input.key {
+        Some(match input.key {
             Key::Char(c) if input.shift_held() => {
                 Buffer(BufferOp::Insert(c.to_ascii_lowercase().to_string()))
             },
             Key::Char(c) => Buffer(BufferOp::Insert(c.to_string())),
             Key::Backspace => Buffer(BufferOp::Delete(Trajectory::Backwards)),
             Key::Delete => Buffer(BufferOp::Delete(Trajectory::Forwards)),
-            // TODO we'll probably need to special-case this
             Key::Return => Buffer(BufferOp::Insert("\n".to_string())),
-            // TODO we'll _definitely_ need to special case this for soft tabs
             Key::Tab => Buffer(BufferOp::Insert("\t".to_string())),
 
-            Key::Left if input.shift_held() => Buffer(BufferOp::Selection(Motion::Left)),
-            Key::Right if input.shift_held() => Buffer(BufferOp::Selection(Motion::Right)),
-            Key::Up if input.shift_held() => Buffer(BufferOp::Selection(Motion::Up)),
-            Key::Down if input.shift_held() => Buffer(BufferOp::Selection(Motion::Down)),
+            _ => match key_to_motion(&input.key) {
+                Some(motion) if input.shift_held() => Buffer(BufferOp::Selection(motion)),
+                Some(motion) if input.modifiers.is_empty() => Buffer(BufferOp::Move(motion)),
+                _ => return None,
+            },
+        })
+    }
+}
 
-            Key::Left => Buffer(BufferOp::Move(Motion::Left)),
-            Key::Right => Buffer(BufferOp::Move(Motion::Right)),
-            Key::Up => Buffer(BufferOp::Move(Motion::Up)),
-            Key::Down => Buffer(BufferOp::Move(Motion::Down)),
-            _ => return None,
-        };
-        Some(op)
+/// Map a movement key into the corresponding [Motion].
+/// This most likely won't scale to our future architecture, but it works for now
+fn key_to_motion(key: &Key) -> Option<Motion> {
+    match key {
+        Key::Left => Some(Motion::Left),
+        Key::Right => Some(Motion::Right),
+        Key::Up => Some(Motion::Up),
+        Key::Down => Some(Motion::Down),
+        Key::Home => Some(Motion::StartOfLine),
+        Key::End => Some(Motion::EndOfLine),
+        _ => None,
     }
 }
