@@ -358,22 +358,41 @@ impl Position {
     }
     /// Turn a position into an offset at that point,
     /// snapping to the end of the line if the cursors column is further than the line is long.
-    fn to_offset(self, text: &Rope) -> usize {
+    ///
+    /// ```rust
+    /// use bazed_core::buffer::Position;
+    /// use xi_rope::Rope;
+    ///
+    /// let t = Rope::from("1234\n12\n");
+    /// assert_eq!(0, Position { line: 0, col: 0 }.to_offset(&t));
+    /// assert_eq!(3, Position { line: 0, col: 3 }.to_offset(&t));
+    /// assert_eq!(5, Position { line: 1, col: 0 }.to_offset(&t));
+    /// assert_eq!(7, Position { line: 1, col: 10 }.to_offset(&t));
+    /// assert_eq!(8, Position { line: 2, col: 0 }.to_offset(&t));
+    /// assert_eq!(8, Position { line: 2, col: 10 }.to_offset(&t));
+    /// ```
+    pub fn to_offset(self, text: &Rope) -> usize {
         let line_offset = text.offset_of_line(self.line);
+
         let naive_offset = if line_offset + self.col >= text.len() {
             text.len()
         } else {
             text.prev_grapheme_offset(line_offset + self.col + 1)
-                .unwrap_or(text.len())
+                .unwrap_or(0)
         };
 
         // restrict naive_offset to at max be the end of the given line
-        let next_line_offset = text.offset_of_line(self.line + 1);
-        if naive_offset >= next_line_offset {
-            text.prev_grapheme_offset(next_line_offset)
-                .unwrap_or(naive_offset)
-        } else {
+        let last_line = text.line_of_offset(text.len());
+        if self.line == last_line {
             naive_offset
+        } else {
+            let next_line_offset = text.offset_of_line(self.line + 1);
+            if naive_offset < next_line_offset {
+                naive_offset
+            } else {
+                text.prev_grapheme_offset(next_line_offset)
+                    .unwrap_or(naive_offset)
+            }
         }
     }
 
@@ -503,14 +522,25 @@ mod test {
     }
 
     #[test]
-    fn test_move_caret_into_shorter_line() {
+    fn test_move_caret_down_into_shorter_line() {
         test_util::setup_test();
-        let mut b = Buffer::new_empty();
+        let mut b = Buffer::new_from_string("hello\nX".to_string());
+        b.regions.set_primary_caret(Region::sticky_cursor(5));
         let vp = Viewport::new_ginormeous();
-        b.insert_at_carets("hi\nworld");
+        b.move_carets(&vp, Motion::Down);
+        assert_eq!(1, b.all_caret_positions().first().line);
+        assert_eq!(1, b.all_caret_positions().first().col);
+    }
+
+    #[test]
+    fn test_move_caret_up_into_shorter_line() {
+        test_util::setup_test();
+        let mut b = Buffer::new_from_string("X\nhello".to_string());
+        b.regions.set_primary_caret(Region::sticky_cursor(5));
+        let vp = Viewport::new_ginormeous();
         b.move_carets(&vp, Motion::Up);
-        b.insert_at_carets(",");
-        assert_eq!("hi,\nworld", b.content_to_string());
+        assert_eq!(0, b.all_caret_positions().first().line);
+        assert_eq!(1, b.all_caret_positions().first().col);
     }
 
     #[test]
