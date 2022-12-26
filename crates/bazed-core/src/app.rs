@@ -220,3 +220,108 @@ pub async fn start(addr: &str, path: Option<std::path::PathBuf>) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use bazed_rpc::{
+        core_proto::{RequestId, ToBackend, ToFrontend},
+        keycode::{Key, KeyInput},
+        server::ClientSendHandle,
+    };
+    use futures::channel::mpsc::unbounded;
+    use uuid::Uuid;
+
+    use super::App;
+
+    macro_rules! expect_msg {
+        ($s:literal, $recv:ident, $p:pat => $e:expr) => {
+            match $recv.try_next()?.unwrap() {
+                $p => $e,
+                _ => panic!(std::concat!("Expected ", $s)),
+            }
+        };
+    }
+
+    /// Set up a view to run tests against
+    async fn setup_view() -> color_eyre::Result<(
+        App,
+        futures::channel::mpsc::UnboundedReceiver<ToFrontend>,
+        uuid::Uuid,
+    )> {
+        let (to_frontend_send, mut to_frontend_recv) = unbounded::<ToFrontend>();
+        let mut app = App::new(ClientSendHandle(to_frontend_send));
+
+        // app_open_ephemeral should trigger an OpenDocument response
+        app.open_ephemeral().await?;
+        let document_id = expect_msg!("OpenDocument", to_frontend_recv, ToFrontend::OpenDocument { document_id, ..} => document_id);
+
+        // ViewOpened should trigger a ViewOpenedResponse response
+        app.handle_rpc_call(ToBackend::ViewOpened {
+            request_id: RequestId(Uuid::new_v4()),
+            document_id,
+            height: 10,
+        })
+        .await?;
+        let view_id = expect_msg!("ViewOpenedResponse", to_frontend_recv, ToFrontend::ViewOpenedResponse { view_id, .. } => view_id);
+
+        Ok((app, to_frontend_recv, view_id))
+    }
+
+    #[tokio::test]
+    async fn test_setup_view() -> color_eyre::Result<()> {
+        setup_view().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_viewport_changed() -> color_eyre::Result<()> {
+        let (mut app, mut to_frontend_recv, view_id) = setup_view().await?;
+        // Expanding the Viewport should trigger an UpdateView response
+        app.handle_rpc_call(ToBackend::ViewportChanged {
+            view_id,
+            height: 15,
+            first_line: 0,
+        })
+        .await?;
+        expect_msg!("UpdateView", to_frontend_recv, ToFrontend::UpdateView { .. } => {});
+
+        // Shrinking the Viewport should not trigger an UpdateView response
+        app.handle_rpc_call(ToBackend::ViewportChanged {
+            view_id,
+            height: 5,
+            first_line: 0,
+        })
+        .await?;
+        // Panic if there is a message
+        to_frontend_recv.try_next().unwrap_err();
+
+        // Scrolling the Viewport should trigger an UpdateView response
+        app.handle_rpc_call(ToBackend::ViewportChanged {
+            view_id,
+            height: 5,
+            first_line: 1,
+        })
+        .await?;
+
+        expect_msg!("UpdateView", to_frontend_recv, ToFrontend::UpdateView { .. } => ());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_keypress() -> color_eyre::Result<()> {
+        let (mut app, mut to_frontend_recv, view_id) = setup_view().await?;
+
+        app.handle_rpc_call(ToBackend::KeyPressed {
+            view_id,
+            input: KeyInput {
+                modifiers: vec![],
+                key: Key::Char('A'),
+            },
+        })
+        .await?;
+        expect_msg!("UpdateView", to_frontend_recv, ToFrontend::UpdateView { .. } => ());
+
+        Ok(())
+    }
+}

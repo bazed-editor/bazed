@@ -1,20 +1,19 @@
 use color_eyre::{eyre::Context, Result};
-use futures::{channel::mpsc::UnboundedReceiver, stream::SplitSink, SinkExt, StreamExt};
-use tokio::net::TcpStream;
+use futures::{
+    channel::mpsc::{SendError, UnboundedReceiver, UnboundedSender},
+    SinkExt, StreamExt,
+};
 use tokio_tungstenite::tungstenite;
 
 use crate::core_proto::{ToBackend, ToFrontend};
 
-pub struct ClientSendHandle(
-    SplitSink<tokio_tungstenite::WebSocketStream<TcpStream>, tungstenite::Message>,
-);
+pub struct ClientSendHandle(pub UnboundedSender<ToFrontend>);
 
 impl ClientSendHandle {
     #[tracing::instrument(skip(self))]
-    pub async fn send_rpc(&mut self, call: ToFrontend) -> Result<(), tungstenite::Error> {
+    pub async fn send_rpc(&mut self, call: ToFrontend) -> Result<(), SendError> {
         tracing::debug!("Sending rpc call to client: {call:?}");
-        let json = serde_json::to_string(&call).unwrap();
-        self.0.send(tungstenite::Message::Text(json)).await
+        self.0.send(call).await
     }
 }
 
@@ -28,7 +27,7 @@ pub async fn wait_for_client(
     // for now, we only accept a single client. This will need to be a loop later.
     let (stream, _) = server_listener.accept().await?;
     let ws_stream = tokio_tungstenite::accept_async(stream).await?;
-    let (ws_send, mut ws_recv) = ws_stream.split();
+    let (mut ws_send, mut ws_recv) = ws_stream.split();
 
     let (mut to_backend_send, to_backend_recv) = futures::channel::mpsc::unbounded::<ToBackend>();
 
@@ -40,7 +39,7 @@ pub async fn wait_for_client(
                         Ok(x) => {
                             if let Err(err) = to_backend_send.send(x).await {
                                 tracing::warn!(
-                                    "Stopping websocket receiver forwarding loop: {err}"
+                                    "Stopping ToBackend receiver forwarding loop: {err}"
                                 );
                                 break;
                             }
@@ -54,5 +53,19 @@ pub async fn wait_for_client(
         }
     });
 
-    Ok((ClientSendHandle(ws_send), to_backend_recv))
+    let (to_frontend_send, mut to_frontend_recv) =
+        futures::channel::mpsc::unbounded::<ToFrontend>();
+
+    tokio::spawn(async move {
+        while let Some(msg) = to_frontend_recv.next().await {
+            tracing::debug!("Sending rpc call to client: {msg:?}");
+            let json = serde_json::to_string(&msg).unwrap();
+            if let Err(err) = ws_send.send(tungstenite::Message::Text(json)).await {
+                tracing::warn!("Stopping ToFrontend forwarding loop: {err}");
+                break;
+            }
+        }
+    });
+
+    Ok((ClientSendHandle(to_frontend_send), to_backend_recv))
 }
