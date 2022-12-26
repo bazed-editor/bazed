@@ -10,7 +10,7 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
-xi-rope = "0.3.0"
+xi-rope = { package = "lapce-xi-rope", version = "0.3.1" }
 nonempty = "0.8.1"
 color-eyre.workspace = true
 uuid.workspace = true
