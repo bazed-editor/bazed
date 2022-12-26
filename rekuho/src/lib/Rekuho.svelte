@@ -5,14 +5,14 @@
 </script>
 
 <script lang="ts">
-  import { example as exampleTheme } from "./Theme"
-  import { initSession, Session, type KeyInput } from "./Rpc"
-
+  import { example as exampleTheme } from "./theme"
+  import { initSession, Session, type KeyInput } from "./rpc"
+  import { state, type CaretPosition } from "./core"
   import Portion from "./Portion.svelte"
-  import { state, type CaretPosition } from "./Core"
 
   export let width: number = 500
   export let height: number = 500
+
   let theme = exampleTheme
 
   let session: Session | null = null
@@ -40,7 +40,7 @@
   style:width
 >
   <Portion
-    bind:theme
+    {theme}
     onKeyInput={onKeyboardInput}
     {onMouseClicked}
     lines={$state.lines}
