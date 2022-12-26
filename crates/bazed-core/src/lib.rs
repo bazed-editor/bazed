@@ -7,6 +7,7 @@ mod input_mapper;
 pub mod region;
 mod user_buffer_op;
 pub mod view;
+mod word_boundary;
 
 #[cfg(test)]
 mod test_util;
