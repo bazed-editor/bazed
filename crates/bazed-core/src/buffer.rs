@@ -1,3 +1,13 @@
+//! Buffer manages all editing operations on the text structure,
+//! including adjusting carets and selections when edits happen and keeping an undo-history.
+//!
+//! # Some terminology
+//! - **offset**: a point in between two code points in the text,
+//!   or the points directly before the first and directly behind the last one.
+//!   Note that this implies that `text.len()` is a valid offset in `text`.
+//!
+//! Terminology of `Region`s and `Carets` etc. is specified in [BufferRegions].
+
 use std::collections::HashMap;
 
 use nonempty::{nonempty, NonEmpty};
@@ -122,9 +132,10 @@ impl Buffer {
     }
 
     pub fn all_caret_positions(&self) -> NonEmpty<Position> {
-        self.regions
-            .carets()
-            .map(|x| Position::from_offset(&self.text, x.head))
+        self.regions.carets().map(|x| {
+            Position::from_offset(&self.text, x.head)
+                .expect("Caret stored in BufferRegions was not a valid offset into the buffer")
+        })
     }
 
     /// get the lines in the given inclusive range
@@ -303,18 +314,18 @@ fn apply_motion_to_region(
             .next_grapheme_offset(region.head)
             .unwrap_or(region.head),
         Motion::Up => {
-            let pos = Position::from_offset(text, region.head);
+            let pos = Position::from_offset(text, region.head).unwrap();
             if pos.line > 0 {
-                pos.with_line(pos.line - 1).to_offset(text)
+                pos.with_line(pos.line - 1).to_offset_snapping(text)
             } else {
                 region.head
             }
         },
         Motion::Down => {
-            let pos = Position::from_offset(text, region.head);
+            let pos = Position::from_offset(text, region.head).unwrap();
             let last_line = text.line_of_offset(text.len());
             if pos.line < last_line {
-                pos.with_line(pos.line + 1).to_offset(text)
+                pos.with_line(pos.line + 1).to_offset_snapping(text)
             } else {
                 region.head
             }
@@ -333,14 +344,16 @@ fn apply_motion_to_region(
             }
         },
         Motion::TopOfViewport => {
-            let current_pos = Position::from_offset(text, region.head);
-            current_pos.with_line(vp.first_line).to_offset(text)
+            let current_pos = Position::from_offset(text, region.head).unwrap();
+            current_pos
+                .with_line(vp.first_line)
+                .to_offset_snapping(text)
         },
         Motion::BottomOfViewport => {
-            let current_pos = Position::from_offset(text, region.head);
+            let current_pos = Position::from_offset(text, region.head).unwrap();
             let last_line = text.line_of_offset(text.len());
             let target_line = vp.last_line().min(last_line);
-            current_pos.with_line(target_line).to_offset(text)
+            current_pos.with_line(target_line).to_offset_snapping(text)
         },
         Motion::NextWordBoundary(boundary_type) => {
             word_boundary::find_word_boundaries(text, region.head)
@@ -611,7 +624,10 @@ mod test {
         b.insert_at_carets("hey");
         b.undo();
         assert_eq!("", b.content_to_string());
-        assert_eq!(0, b.all_caret_positions().first().to_offset(&b.text));
+        assert_eq!(
+            0,
+            b.all_caret_positions().first().to_offset_snapping(&b.text)
+        );
         b.insert_at_carets("hello");
         assert_eq!("hello", b.content_to_string());
     }
