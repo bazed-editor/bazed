@@ -2,7 +2,7 @@ use unicode_general_category::GeneralCategory;
 use xi_rope::Rope;
 
 /// Type of a word-boundary.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub(crate) enum WordBoundaryType {
     /// Indicates the start of a "word"
     Start,
@@ -39,7 +39,7 @@ impl WordBoundaryType {
 
 /// Category of character, loosely derived from the unicode general category defined
 /// in [Unicode Standard Annex #44, Section 5.7.1](http://www.unicode.org/reports/tr44/#General_Category_Values)
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(crate) enum CharCategory {
     /// Any whitespace or lineseparator character
     Whitespace,
