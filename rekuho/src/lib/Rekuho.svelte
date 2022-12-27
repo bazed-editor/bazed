@@ -20,18 +20,18 @@
     session = x
   })
 
-  function onKeyboardInput(input: KeyInput) {
+  function onKeyInput(input: CustomEvent<KeyInput>) {
     if (!session) {
       return
     }
-    session.handleKeyPressed(input)
+    session.handleKeyPressed(input.detail)
   }
 
-  function onMouseClicked(pos: CaretPosition) {
+  function onMouseDown(pos: CustomEvent<CaretPosition>) {
     if (!session) {
       return
     }
-    session.handleMouseClicked(pos)
+    session.handleMouseClicked(pos.detail)
   }
 </script>
 
@@ -41,8 +41,8 @@
 >
   <Portion
     {theme}
-    onKeyInput={onKeyboardInput}
-    {onMouseClicked}
+    on:keyinput={onKeyInput}
+    on:mousedown={onMouseDown}
     lines={$state.lines}
     {width}
     {height}
