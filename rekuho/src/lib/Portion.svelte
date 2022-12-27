@@ -3,6 +3,7 @@
   This window contains the visible and editable text.
 -->
 <script lang="ts">
+  import { createEventDispatcher } from "svelte"
   import type { Theme } from "./theme"
   import { measure as fontMeasure } from "./font"
   import { state, type CaretPosition } from "./core"
@@ -13,14 +14,18 @@
   export let height: number
   export let width: number
   export let lines: string[]
-  export let onKeyInput: (k: KeyInput) => void
-  export let onMouseClicked: (pos: CaretPosition) => void
 
   const gutter_width = 50 // maybe should be part of theme, minimum value?
   let input: HTMLTextAreaElement
   let container: Element
 
-  const emitKeyboardInput = (key: Key) => onKeyInput({ modifiers: [], key })
+  const dispatch = createEventDispatcher<{
+    keyinput: KeyInput
+    mousedown: CaretPosition
+  }>()
+
+  const emitKeyboardInput = (input: KeyInput) => dispatch("keyinput", input)
+  const onMouseClicked = (pos: CaretPosition) => dispatch("mousedown", pos)
 
   $: view_rect = container && container.getBoundingClientRect()
 
@@ -44,7 +49,7 @@
     input.focus()
   }
 
-  // We don't have mouse-based selection in the backend yet, :ree:
+  // TODO: mouse-based selection in the backend yet, :ree:
 
   /*
   const mousedown = (ev: MouseEvent) => {
@@ -104,7 +109,7 @@
     }
 
     if (key) {
-      onKeyInput({ modifiers, key })
+      emitKeyboardInput({ modifiers, key })
     }
   }
 
@@ -134,9 +139,6 @@
   $: text_view_width = width - gutter_width
   $: text_to_visible_ratio = (line_view_width * column_width - theme.text_offset) / width
   $: vertical_scroller_width = text_view_width / text_to_visible_ratio
-
-  let cursors: CaretPosition[] = []
-  cursors = $state.carets
 </script>
 
 <div
@@ -144,7 +146,6 @@
   style:width="{width}px"
   style:height="{height}px"
 >
-  <!--<GutterColumn line_height={line_height} />-->
   <!-- TODO: refactor into `Gutter.svelte` -->
   <div
     class="gutter"
@@ -218,7 +219,7 @@
     </div>
 
     <div class="cursors-layer">
-      {#each cursors as { line, col }, i}
+      {#each $state.carets as { line, col }, i}
         {@const [x, y] = transformToScreenPosition([col, line])}
         <div
           class="cursor"
@@ -304,5 +305,14 @@
 
   .line-view {
     white-space: pre;
+  }
+
+  .cursors-layer {
+    position: absolute;
+    top: 0;
+  }
+
+  .cursor {
+    position: absolute;
   }
 </style>
