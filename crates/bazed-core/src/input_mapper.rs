@@ -37,6 +37,7 @@ pub(crate) fn interpret_key_input(input: &KeyInput) -> Option<Operation> {
 fn key_to_motion(ctrl_held: bool, key: &Key) -> Option<Motion> {
     match key {
         Key::Right if ctrl_held => Some(Motion::NextWordBoundary(WordBoundaryType::Start)),
+        Key::Left if ctrl_held => Some(Motion::PrevWordBoundary(WordBoundaryType::Start)),
 
         Key::Left => Some(Motion::Left),
         Key::Right => Some(Motion::Right),

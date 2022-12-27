@@ -55,4 +55,5 @@ pub(crate) enum Motion {
     TopOfViewport,
     BottomOfViewport,
     NextWordBoundary(WordBoundaryType),
+    PrevWordBoundary(WordBoundaryType),
 }
