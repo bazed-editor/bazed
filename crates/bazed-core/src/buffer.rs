@@ -342,14 +342,16 @@ fn apply_motion_to_region(
             current_pos.with_line(target_line).to_offset(text)
         },
         Motion::NextWordBoundary(boundary_type) => {
-            let next_matching_boundary = word_boundary::find_word_boundaries(text, region.head)
-                .filter(|(_, t)| t == &boundary_type)
-                .next();
-            if let Some((boundary_offset, _)) = next_matching_boundary {
-                boundary_offset
-            } else {
-                text.len()
-            }
+            word_boundary::find_word_boundaries(text, region.head)
+                .filter(|(_, t)| t.matches(&boundary_type))
+                .next()
+                .map_or(text.len(), |(offset, _)| offset)
+        },
+        Motion::PrevWordBoundary(boundary_type) => {
+            word_boundary::find_word_boundaries_backwards(text, region.head)
+                .filter(|(_, t)| t.matches(&boundary_type))
+                .next()
+                .map_or(0, |(offset, _)| offset)
         },
     };
     Region {
@@ -500,6 +502,43 @@ mod test {
         );
         assert_eq!(
             12,
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(6), false, motion_start).head,
+            "Next word boundary should move you, even when starting on a word bounadry",
+        );
+        assert_eq!(
+            17,
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(13), false, motion_end).head,
+            "End of the string should be seen as a boundary when moving forwards",
+        );
+    }
+
+    #[test]
+    fn test_move_previous_word_boundary() {
+        test_util::setup_test();
+        let t = Rope::from("hello hello hello");
+        let vp = Viewport::new_ginormeous();
+        let motion_start = Motion::PrevWordBoundary(WordBoundaryType::Start);
+        let motion_end = Motion::PrevWordBoundary(WordBoundaryType::End);
+        assert_eq!(
+            0,
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(3), false, motion_start).head,
+            "Start of the string should be seen as a boundary when moving backwards",
+        );
+        assert_eq!(
+            0,
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(3), false, motion_start).head,
+            "Start of the string should be seen as a boundary when moving backwards",
+        );
+        assert_eq!(
+            5,
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(8), false, motion_end).head
+        );
+        assert_eq!(
+            6,
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(8), false, motion_start).head
+        );
+        assert_eq!(
+            0,
             apply_motion_to_region(&t, &vp, Region::sticky_cursor(6), false, motion_start).head
         );
     }
