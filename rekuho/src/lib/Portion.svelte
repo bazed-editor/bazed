@@ -9,7 +9,7 @@
   import { measure as fontMeasure } from "./Font"
   import { state, type CaretPosition } from "./Core"
   import type { Vector2 } from "./LinearAlgebra"
-  import type { Key, KeyInput } from "./Rpc"
+  import type { Key, KeyInput, Modifier } from "./Rpc"
 
   const gutter_width = 50 // maybe should be part of theme, minimum value?
 
@@ -22,8 +22,6 @@
 
   let input: HTMLTextAreaElement
   let container: Element
-
-  const emitKeyboardInput = (key: Key) => onKeyInput({ modifiers: [], key })
 
   // TODO: separate into linear_algebra.ts
   $: view_rect = container && container.getBoundingClientRect()
@@ -74,30 +72,41 @@
   */
 
   const keydown = (ev: KeyboardEvent) => {
-    console.log(ev.key)
+    console.log(ev)
+    const modifiers: Modifier[] = []
+    if (ev.ctrlKey) modifiers.push("ctrl")
+    if (ev.shiftKey) modifiers.push("shift")
+    if (ev.altKey) modifiers.push("alt")
+    if (ev.metaKey) modifiers.push("win")
+
+    let key: Key | null = null
     if (ev.key.length === 1) {
-      emitKeyboardInput({ char: ev.key })
+      key = { char: ev.key }
     }
 
     switch (ev.key) {
       case "Enter":
-        emitKeyboardInput("return")
+        key = "return"
         break
       case "Backspace":
-        emitKeyboardInput("backspace")
+        key = "backspace"
         break
       case "ArrowLeft":
-        emitKeyboardInput("left")
+        key = "left"
         break
       case "ArrowRight":
-        emitKeyboardInput("right")
+        key = "right"
         break
       case "ArrowUp":
-        emitKeyboardInput("up")
+        key = "up"
         break
       case "ArrowDown":
-        emitKeyboardInput("down")
+        key = "down"
         break
+    }
+
+    if (key) {
+      onKeyInput({ modifiers, key })
     }
   }
 
