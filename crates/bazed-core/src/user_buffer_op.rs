@@ -2,6 +2,8 @@
 //! This includes edit and movement operations.
 //! These will occur at the caret positions, and are thus only used for directly userfacing operations
 
+use crate::word_boundary::WordBoundaryType;
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum Trajectory {
     Forwards,
@@ -52,4 +54,5 @@ pub(crate) enum Motion {
     EndOfLine,
     TopOfViewport,
     BottomOfViewport,
+    NextWordBoundary(WordBoundaryType),
 }

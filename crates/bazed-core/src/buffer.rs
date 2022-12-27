@@ -9,6 +9,7 @@ use crate::{
     region::{Region, RegionId},
     user_buffer_op::{BufferOp, EditType, Motion, Trajectory},
     view::Viewport,
+    word_boundary,
 };
 
 mod undo_history;
@@ -284,14 +285,16 @@ impl Buffer {
 /// Apply a given motion to a region.
 /// if `only_move_head` is false, the tail of the region gets set to the new head,
 /// collapsing it into a cursor.
+///
+/// May result in a region at offset `text.len()`, meaning that it is outside the bounds of the text.
 fn apply_motion_to_region(
     text: &Rope,
     vp: &Viewport,
     region: Region,
     only_move_head: bool,
-    op: Motion,
+    motion: Motion,
 ) -> Region {
-    let offset = match op {
+    let offset = match motion {
         Motion::Left => text
             .prev_grapheme_offset(region.head)
             .unwrap_or(region.head),
@@ -337,6 +340,16 @@ fn apply_motion_to_region(
             let last_line = text.line_of_offset(text.len());
             let target_line = vp.last_line().min(last_line);
             current_pos.with_line(target_line).to_offset(text)
+        },
+        Motion::NextWordBoundary(boundary_type) => {
+            let next_matching_boundary = word_boundary::find_word_boundaries(text, region.head)
+                .filter(|(_, t)| t == &boundary_type)
+                .next();
+            if let Some((boundary_offset, _)) = next_matching_boundary {
+                boundary_offset
+            } else {
+                text.len()
+            }
         },
     };
     Region {
@@ -413,6 +426,7 @@ mod test {
     use super::*;
     use crate::test_util;
     use crate::view::Viewport;
+    use crate::word_boundary::WordBoundaryType;
 
     #[test]
     fn test_insert() {
@@ -467,6 +481,27 @@ mod test {
         let mut b = Buffer::new_empty();
         b.delete_at_carets(Trajectory::Backwards);
         assert_eq!("", b.content_to_string());
+    }
+
+    #[test]
+    fn test_move_next_word_boundary() {
+        test_util::setup_test();
+        let t = Rope::from("hello hello hello");
+        let vp = Viewport::new_ginormeous();
+        let motion_start = Motion::NextWordBoundary(WordBoundaryType::Start);
+        let motion_end = Motion::NextWordBoundary(WordBoundaryType::End);
+        assert_eq!(
+            5,
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(1), false, motion_end).head
+        );
+        assert_eq!(
+            6,
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(1), false, motion_start).head
+        );
+        assert_eq!(
+            12,
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(6), false, motion_start).head
+        );
     }
 
     #[test]
