@@ -90,10 +90,14 @@ impl BufferRegions {
             .map(|(_, v)| v)
     }
 
-    /// Directly overwrite the primary caret / selection
-    #[cfg(test)]
+    /// Directly overwrite the primary caret / selection.
+    /// **Note** that you should ensure you're always setting a sticky region here.
     fn set_primary_caret(&mut self, region: Region) {
         self.regions.insert(*self.carets.first(), region);
+    }
+
+    fn collapse_carets_into_primary(&mut self) {
+        self.carets.truncate(1);
     }
 }
 
@@ -263,6 +267,31 @@ impl Buffer {
             }
         }
         tracing::trace!(history = ?self.undo_history, "after redo");
+    }
+
+    /// Jump the user caret to a given position.
+    ///
+    /// If `snap` is true,
+    /// we'll snap the cursor to the first valid offset in the given line and to the closest valid line.
+    /// If `snap` is false andthere is no text at the given position, we'll do nothing.
+    ///
+    /// If there is more than one caret, collapses all carets down into the main one.
+    ///
+    /// Returns true if the caret has changed, false otherwise
+    pub fn jump_caret_to_position(&mut self, coords: Position, snap: bool) -> bool {
+        let offset = if snap {
+            coords.to_offset(&self.text)
+        } else {
+            Some(coords.to_offset_snapping(&self.text))
+        };
+        if let Some(offset) = offset {
+            self.regions.collapse_carets_into_primary();
+            self.regions
+                .set_primary_caret(Region::sticky_cursor(offset));
+            true
+        } else {
+            false
+        }
     }
 
     pub(crate) fn apply_buffer_op(&mut self, vp: &Viewport, op: BufferOp) {

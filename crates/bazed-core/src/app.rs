@@ -11,6 +11,7 @@ use futures::StreamExt;
 use tokio::sync::RwLock;
 
 use crate::{
+    buffer::position::Position,
     document::{Document, DocumentId},
     input_mapper::interpret_key_input,
     user_buffer_op::{DocumentOp, Operation},
@@ -75,7 +76,8 @@ impl App {
             },
 
             ToBackend::MouseInput { view_id, position } => {
-                self.handle_mouse_input(ViewId::from_uuid(view_id), position)?
+                self.handle_mouse_input(ViewId::from_uuid(view_id), position)
+                    .await?
             },
             ToBackend::ViewportChanged {
                 view_id,
@@ -167,12 +169,21 @@ impl App {
         Ok(())
     }
 
-    fn handle_mouse_input(&mut self, view: ViewId, coords: CaretPosition) -> Result<()> {
-        let _view = self
+    async fn handle_mouse_input(&mut self, view_id: ViewId, coords: CaretPosition) -> Result<()> {
+        let view = self
             .views
-            .get_mut(&view)
-            .ok_or(Error::InvalidViewId(view))?;
-        tracing::info!("mouse input: {coords:?}. No handling implemented so far");
+            .get_mut(&view_id)
+            .ok_or(Error::InvalidViewId(view_id))?;
+        let document = self
+            .documents
+            .get_mut(&view.document_id)
+            .ok_or(Error::InvalidDocumentId(view.document_id))?;
+        document
+            .buffer
+            .jump_caret_to_position(Position::new(coords.line, coords.col), false);
+        self.event_send
+            .send_rpc(document.create_update_notification(view_id, view))
+            .await?;
         Ok(())
     }
 
