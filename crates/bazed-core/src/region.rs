@@ -59,6 +59,11 @@ impl Region {
         self
     }
 
+    /// Check if  this Region represents a cursor, meaning that it has length 0
+    pub fn is_cursor(&self) -> bool {
+        self.head == self.tail
+    }
+
     pub fn apply_transformer<N: xi_rope::tree::NodeInfo>(
         &mut self,
         transformer: &mut xi_rope::Transformer<N>,
