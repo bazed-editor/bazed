@@ -13,6 +13,7 @@ license.workspace = true
 xi-rope = { package = "lapce-xi-rope", version = "0.3.1" }
 unicode-general-category = "0.6.0"
 nonempty = "0.8.1"
+itertools = "0.10.5"
 color-eyre.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
