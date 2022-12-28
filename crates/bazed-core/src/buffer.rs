@@ -10,6 +10,7 @@
 
 use std::collections::HashMap;
 
+use itertools::Itertools;
 use nonempty::{nonempty, NonEmpty};
 use tap::Pipe;
 use xi_rope::{engine::Engine, tree::NodeInfo, DeltaBuilder, Rope, RopeDelta, Transformer};
@@ -74,6 +75,7 @@ impl BufferRegions {
         self.carets
             .iter()
             .map(|x| *self.regions.get(x).expect("caret not found in region"))
+            .sorted_by_key(|x| x.head) // TODO figure out a proper way to do this
             .collect::<Vec<_>>()
             .pipe(NonEmpty::from_vec)
             .unwrap()
@@ -88,6 +90,12 @@ impl BufferRegions {
             .iter_mut()
             .filter(|(k, _)| self.carets.contains(k))
             .map(|(_, v)| v)
+    }
+
+    fn insert_caret(&mut self, idx: usize, region: Region) {
+        let id = RegionId::gen();
+        self.carets.insert(idx, id);
+        self.regions.insert(id, region);
     }
 
     /// Directly overwrite the primary caret / selection.
@@ -310,6 +318,15 @@ impl Buffer {
             BufferOp::Selection(motion) => {
                 for region in self.regions.carets_mut() {
                     *region = apply_motion_to_region(&self.text, vp, *region, true, motion);
+                }
+            },
+            BufferOp::NewCaret(motion) => {
+                let carets = self.regions.carets();
+                let primary_caret = carets.first();
+                let new_caret =
+                    apply_motion_to_region(&self.text, vp, *primary_caret, true, motion);
+                if &new_caret != primary_caret {
+                    self.regions.insert_caret(0, new_caret)
                 }
             },
         }

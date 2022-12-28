@@ -39,6 +39,8 @@ pub(crate) enum BufferOp {
     Move(Motion),
     /// Expand or change the selection
     Selection(Motion),
+    /// Create a new cursor at the location the motion targets
+    NewCaret(Motion),
 }
 
 /// A motion, either character-wise or defined by some higher-level semantic target.
