@@ -8,106 +8,20 @@
 //!
 //! Terminology of `Region`s and `Carets` etc. is specified in [BufferRegions].
 
-use std::collections::HashMap;
+use nonempty::NonEmpty;
+use xi_rope::{engine::Engine, DeltaBuilder, Rope, RopeDelta};
 
-use itertools::Itertools;
-use nonempty::{nonempty, NonEmpty};
-use tap::Pipe;
-use xi_rope::{engine::Engine, tree::NodeInfo, DeltaBuilder, Rope, RopeDelta, Transformer};
-
-use self::{position::Position, undo_history::UndoHistory};
+use self::{buffer_regions::BufferRegions, position::Position, undo_history::UndoHistory};
 use crate::{
-    region::{Region, RegionId},
+    region::Region,
     user_buffer_op::{BufferOp, EditType, Motion, Trajectory},
     view::Viewport,
     word_boundary,
 };
 
+mod buffer_regions;
 pub mod position;
 mod undo_history;
-
-/// Stores all the active regions in a buffer.
-///
-/// Terminology:
-/// - *Region* refers to any region in the buffer
-/// - *Cursor* refers to any region of length 0
-/// - *Selection* refers to regions that represent concrete, user-controlled selections
-/// - *Caret* refers to regions that represent concrete, user-controlled carets.
-///   (i.e.: The places where text gets inserted)
-///   Currently this also includes selections.
-///   
-#[derive(Debug)]
-struct BufferRegions {
-    regions: HashMap<RegionId, Region>,
-    /// All the active carets. There will always be at least one.
-    /// The first element may be considered the "primary" caret,
-    /// being the caret that will remain when exiting any sort of multi-caret mode.
-    ///
-    /// All possible mutating interactions with [BufferRegions] must guarantee
-    /// that all ids stored here continue to actually map to a region.
-    carets: NonEmpty<RegionId>,
-}
-
-impl Default for BufferRegions {
-    fn default() -> Self {
-        let primary_caret = Region::sticky_cursor(0);
-        let primary_caret_id = RegionId::gen();
-        let regions = maplit::hashmap! { primary_caret_id => primary_caret };
-        let carets = nonempty![primary_caret_id];
-        Self { regions, carets }
-    }
-}
-
-impl BufferRegions {
-    fn apply_transformer<N: NodeInfo>(&mut self, trans: &mut Transformer<N>) {
-        for region in self.regions.values_mut() {
-            region.apply_transformer(trans);
-        }
-    }
-
-    fn apply_delta(&mut self, delta: &RopeDelta) {
-        let mut transformer = xi_rope::Transformer::new(delta);
-        self.apply_transformer(&mut transformer);
-    }
-
-    /// Return all carets in this buffer
-    fn carets(&self) -> NonEmpty<Region> {
-        self.carets
-            .iter()
-            .map(|x| *self.regions.get(x).expect("caret not found in region"))
-            .sorted_by_key(|x| x.head) // TODO figure out a proper way to do this
-            .collect::<Vec<_>>()
-            .pipe(NonEmpty::from_vec)
-            .unwrap()
-    }
-
-    /// Return an iterator over mutable references to all carets in this buffer
-    fn carets_mut(&mut self) -> impl Iterator<Item = &mut Region> {
-        // TODO This is stupid, but iterating over self.carets instead and getting the refs
-        // through get_mut doesn't work trivially, as rust can't verify that we won't get multiple
-        // mut refs to the same entry as a result of overlapping keys...
-        self.regions
-            .iter_mut()
-            .filter(|(k, _)| self.carets.contains(k))
-            .map(|(_, v)| v)
-    }
-
-    fn insert_caret(&mut self, idx: usize, region: Region) {
-        let id = RegionId::gen();
-        self.carets.insert(idx, id);
-        self.regions.insert(id, region);
-    }
-
-    /// Directly overwrite the primary caret / selection.
-    /// **Note** that you should ensure you're always setting a sticky region here.
-    fn set_primary_caret(&mut self, region: Region) {
-        self.regions.insert(*self.carets.first(), region);
-    }
-
-    fn collapse_carets_into_primary(&mut self) {
-        self.carets.truncate(1);
-    }
-}
 
 #[derive(Debug)]
 pub struct Buffer {
@@ -130,6 +44,7 @@ impl Buffer {
             last_edit_type: EditType::Other,
         }
     }
+
     pub fn new_empty() -> Self {
         Self::new_from_string(String::new())
     }
@@ -171,10 +86,10 @@ impl Buffer {
     /// **WARNING:** This is very much a temporary solution, as it _will_ cause inconsistent state as soon as we use
     /// regions for more than just caret position. (see https://github.com/bazed-editor/bazed/issues/47)
     fn snap_regions_to_valid_position(&mut self) {
-        for region in self.regions.regions.values_mut() {
+        self.regions.update_regions(|_, region| {
             region.head = region.head.min(self.text.len());
             region.tail = region.tail.min(self.text.len());
-        }
+        });
     }
 
     #[tracing::instrument(skip(self), fields(head_rev_id = ?self.engine.get_head_rev_id()))]
@@ -197,13 +112,12 @@ impl Buffer {
     }
 
     fn insert_at_carets(&mut self, chars: &str) {
-        // This is also where xi handles surrounding stuff in parens when something is selected.
-        // i.e. when the text "foo" is in the selection, and the chars are "(",
-        // then this would turn the text into "(foo)"
-        // We don't yet handle this at all, and I'm not sure if we want to.
-
         let mut builder = DeltaBuilder::new(self.text.len());
         let text: Rope = chars.into();
+        tracing::debug!(
+            "Inserting, caret regions are: {:?}",
+            self.regions.carets().iter().collect::<Vec<_>>()
+        );
         for region in self.regions.carets() {
             builder.replace(region, text.clone());
         }
@@ -315,18 +229,16 @@ impl Buffer {
                 // Do we just discard selections when moving without BufferOp::Selection?
                 self.move_carets(vp, motion);
             },
-            BufferOp::Selection(motion) => {
-                for region in self.regions.carets_mut() {
-                    *region = apply_motion_to_region(&self.text, vp, *region, true, motion);
-                }
-            },
+            BufferOp::Selection(motion) => self.regions.update_carets(|_, region| {
+                *region = apply_motion_to_region(&self.text, vp, *region, true, motion);
+            }),
             BufferOp::NewCaret(motion) => {
                 let carets = self.regions.carets();
                 let primary_caret = carets.first();
                 let new_caret =
-                    apply_motion_to_region(&self.text, vp, *primary_caret, true, motion);
+                    apply_motion_to_region(&self.text, vp, *primary_caret, false, motion);
                 if &new_caret != primary_caret {
-                    self.regions.insert_caret(0, new_caret)
+                    self.regions.add_caret(true, new_caret);
                 }
             },
         }
@@ -334,9 +246,9 @@ impl Buffer {
 
     /// Move carets by a given motion, collapsing any selections down into carets.
     pub(crate) fn move_carets(&mut self, viewport: &Viewport, motion: Motion) {
-        for region in self.regions.carets_mut() {
+        self.regions.update_carets(|_, region| {
             *region = apply_motion_to_region(&self.text, viewport, *region, false, motion);
-        }
+        })
     }
 }
 
@@ -548,7 +460,7 @@ mod test {
         let vp = Viewport::new_ginormeous();
         b.apply_buffer_op(&vp, BufferOp::Selection(Motion::Right));
         b.apply_buffer_op(&vp, BufferOp::Selection(Motion::Right));
-        assert_eq!((0, 2), b.regions.carets().first().range());
+        assert_eq!((0..2), b.regions.carets().first().range());
     }
 
     #[test]
@@ -558,9 +470,9 @@ mod test {
         let vp = Viewport::new_ginormeous();
         b.apply_buffer_op(&vp, BufferOp::Selection(Motion::Right));
         b.apply_buffer_op(&vp, BufferOp::Selection(Motion::Right));
-        assert_eq!((0, 2), b.regions.carets().first().range());
+        assert_eq!((0..2), b.regions.carets().first().range());
         b.apply_buffer_op(&vp, BufferOp::Move(Motion::Right));
-        assert_eq!((3, 3), b.regions.carets().first().range());
+        assert_eq!((3..3), b.regions.carets().first().range());
     }
 
     #[test]
