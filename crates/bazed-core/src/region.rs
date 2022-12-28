@@ -34,6 +34,9 @@ pub struct Region {
     pub head: usize,
     pub tail: usize,
     pub stickyness: Stickyness,
+    /// The column this region "wants" to be at.
+    /// Used to remember horizontal position when moving across shorter lines
+    pub preferred_column: Option<usize>,
 }
 
 impl Region {
@@ -46,6 +49,7 @@ impl Region {
             head,
             tail,
             stickyness: Stickyness::Sticky,
+            preferred_column: None,
         }
     }
 

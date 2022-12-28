@@ -264,6 +264,9 @@ fn apply_motion_to_region(
     only_move_head: bool,
     motion: Motion,
 ) -> Region {
+    // The column the new region wants to be in
+    // set when moving vertically, for use when coming out of a shorter line.
+    let mut preferred_column = None;
     let offset = match motion {
         Motion::Left => text
             .prev_grapheme_offset(region.head)
@@ -271,23 +274,6 @@ fn apply_motion_to_region(
         Motion::Right => text
             .next_grapheme_offset(region.head)
             .unwrap_or(region.head),
-        Motion::Up => {
-            let pos = Position::from_offset(text, region.head).unwrap();
-            if pos.line > 0 {
-                pos.with_line(pos.line - 1).to_offset_snapping(text)
-            } else {
-                region.head
-            }
-        },
-        Motion::Down => {
-            let pos = Position::from_offset(text, region.head).unwrap();
-            let last_line = text.line_of_offset(text.len());
-            if pos.line < last_line {
-                pos.with_line(pos.line + 1).to_offset_snapping(text)
-            } else {
-                region.head
-            }
-        },
         Motion::StartOfLine => {
             let line = text.line_of_offset(region.head);
             text.offset_of_line(line)
@@ -301,18 +287,6 @@ fn apply_motion_to_region(
                 text.len()
             }
         },
-        Motion::TopOfViewport => {
-            let current_pos = Position::from_offset(text, region.head).unwrap();
-            current_pos
-                .with_line(vp.first_line)
-                .to_offset_snapping(text)
-        },
-        Motion::BottomOfViewport => {
-            let current_pos = Position::from_offset(text, region.head).unwrap();
-            let last_line = text.line_of_offset(text.len());
-            let target_line = vp.last_line().min(last_line);
-            current_pos.with_line(target_line).to_offset_snapping(text)
-        },
         Motion::NextWordBoundary(boundary_type) => {
             word_boundary::find_word_boundaries(text, region.head)
                 .filter(|(_, t)| t.matches(&boundary_type))
@@ -325,11 +299,61 @@ fn apply_motion_to_region(
                 .next()
                 .map_or(0, |(offset, _)| offset)
         },
+
+        Motion::Up => {
+            let pos = Position::from_offset(text, region.head).unwrap();
+            let pos = match region.preferred_column {
+                Some(cur_preferred_column) => pos.with_col(cur_preferred_column),
+                None => pos,
+            };
+            preferred_column = Some(pos.col);
+            if pos.line > 0 {
+                pos.with_line(pos.line - 1).to_offset_snapping(text)
+            } else {
+                region.head
+            }
+        },
+        Motion::Down => {
+            let pos = Position::from_offset(text, region.head).unwrap();
+            let pos = match region.preferred_column {
+                Some(cur_preferred_column) => pos.with_col(cur_preferred_column),
+                None => pos,
+            };
+            preferred_column = Some(pos.col);
+            let last_line = text.line_of_offset(text.len());
+            if pos.line < last_line {
+                pos.with_line(pos.line + 1).to_offset_snapping(text)
+            } else {
+                region.head
+            }
+        },
+        Motion::TopOfViewport => {
+            let pos = Position::from_offset(text, region.head).unwrap();
+            let pos = match region.preferred_column {
+                Some(cur_preferred_column) => pos.with_col(cur_preferred_column),
+                None => pos,
+            };
+            preferred_column = Some(pos.col);
+            pos.with_line(vp.first_line).to_offset_snapping(text)
+        },
+        Motion::BottomOfViewport => {
+            let pos = Position::from_offset(text, region.head).unwrap();
+            let pos = match region.preferred_column {
+                Some(cur_preferred_column) => pos.with_col(cur_preferred_column),
+                None => pos,
+            };
+            preferred_column = Some(pos.col);
+            let last_line = text.line_of_offset(text.len());
+            let target_line = vp.last_line().min(last_line);
+            pos.with_line(target_line).to_offset_snapping(text)
+        },
     };
+
     Region {
         head: offset,
         tail: if only_move_head { region.tail } else { offset },
         stickyness: region.stickyness,
+        preferred_column,
     }
 }
 
@@ -461,6 +485,29 @@ mod test {
         b.apply_buffer_op(&vp, BufferOp::Selection(Motion::Right));
         b.apply_buffer_op(&vp, BufferOp::Selection(Motion::Right));
         assert_eq!((0..2), b.regions.carets().first().range());
+    }
+
+    #[test]
+    fn test_move_caret_remembers_column() {
+        test_util::setup_test();
+        let mut b = Buffer::new_from_string("hello\nxx\nworld".to_string());
+        b.regions.set_primary_caret(Region::sticky_cursor(3));
+        let vp = Viewport::new_ginormeous();
+        b.apply_buffer_op(&vp, BufferOp::Move(Motion::Down));
+        b.apply_buffer_op(&vp, BufferOp::Move(Motion::Down));
+        assert_eq!(12, b.regions.carets().first().head);
+    }
+
+    #[test]
+    fn test_move_caret_forgets_column_after_horiz_movement() {
+        test_util::setup_test();
+        let mut b = Buffer::new_from_string("hello\nxxx\nworld".to_string());
+        b.regions.set_primary_caret(Region::sticky_cursor(12));
+        let vp = Viewport::new_ginormeous();
+        b.apply_buffer_op(&vp, BufferOp::Move(Motion::Up));
+        b.apply_buffer_op(&vp, BufferOp::Move(Motion::Left));
+        b.apply_buffer_op(&vp, BufferOp::Move(Motion::Up));
+        assert_eq!(1, b.regions.carets().first().head);
     }
 
     #[test]
