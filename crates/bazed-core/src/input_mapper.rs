@@ -26,6 +26,7 @@ pub(crate) fn interpret_key_input(input: &KeyInput) -> Option<Operation> {
 
         _ => match key_to_motion(input.ctrl_held(), &input.key) {
             Some(motion) if input.shift_held() => Operation::Buffer(BufferOp::Selection(motion)),
+            Some(motion) if input.alt_held() => Operation::Buffer(BufferOp::NewCaret(motion)),
             Some(motion) => Operation::Buffer(BufferOp::Move(motion)),
             _ => return None,
         },
