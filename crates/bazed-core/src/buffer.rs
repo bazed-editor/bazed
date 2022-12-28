@@ -144,54 +144,52 @@ impl Buffer {
     }
 
     fn undo(&mut self) {
-        tracing::trace!(
-            history = ?self.undo_history,
-            head_rev_id = ?self.engine.get_head_rev_id(),
-            "before undo",
-        );
+        tracing::trace!(history = ?self.undo_history, "before undo");
         if self.undo_history.undo() {
-            self.last_edit_type = EditType::Other;
-
-            let old_head_rev = self.engine.get_head_rev_id();
-
-            self.engine
-                .undo(self.undo_history.currently_undone().clone());
-            self.text = self.engine.get_head().clone();
-
-            match self.engine.try_delta_rev_head(old_head_rev.token()) {
-                Ok(delta) => self.regions.apply_delta(&delta),
-                Err(err) => {
-                    tracing::error!("Error generating delta after undo: {err}");
-                    self.snap_regions_to_valid_position();
-                },
-            }
+            self.update_undo_state();
         }
-        tracing::trace!(
-            history = ?self.undo_history,
-            head_rev_id = ?self.engine.get_head_rev_id(),
-            "after undo",
-        );
+        tracing::trace!(history = ?self.undo_history, "after undo");
     }
 
     fn redo(&mut self) {
         tracing::trace!(history = ?self.undo_history, "before redo");
         if self.undo_history.redo() {
-            self.last_edit_type = EditType::Other;
-            let old_head_rev = self.engine.get_head_rev_id();
-
-            self.engine
-                .undo(self.undo_history.currently_undone().clone());
-            self.text = self.engine.get_head().clone();
-
-            match self.engine.try_delta_rev_head(old_head_rev.token()) {
-                Ok(delta) => self.regions.apply_delta(&delta),
-                Err(err) => {
-                    tracing::error!("Error generating delta after redo: {err}");
-                    self.snap_regions_to_valid_position();
-                },
-            }
+            self.update_undo_state();
         }
         tracing::trace!(history = ?self.undo_history, "after redo");
+    }
+
+    fn update_undo_state(&mut self) {
+        self.last_edit_type = EditType::Other;
+        let old_head_rev = self.engine.get_head_rev_id();
+
+        self.engine
+            .undo(self.undo_history.currently_undone().clone());
+        self.text = self.engine.get_head().clone();
+
+        match self.engine.try_delta_rev_head(old_head_rev.token()) {
+            Ok(delta) => self.jump_carets_into_range_of_delta(&delta),
+            Err(err) => {
+                tracing::error!("Error generating delta while updating undo state: {err}");
+                self.snap_regions_to_valid_position();
+            },
+        }
+    }
+
+    fn jump_carets_into_range_of_delta(&mut self, delta: &RopeDelta) {
+        let (before_undo_interval, replacement_length) = delta.summary();
+        let affected_range_end = before_undo_interval.start() + replacement_length;
+        self.regions.apply_delta(&delta);
+
+        // Jump all carets into the changed area, ensuring that the user
+        // sees where stuff has changed
+        self.regions.update_carets(|_, region| {
+            if region.is_cursor() {
+                region.head = region
+                    .head
+                    .clamp(before_undo_interval.start(), affected_range_end);
+            }
+        });
     }
 
     /// Jump the user caret to a given position.
@@ -477,7 +475,7 @@ mod test {
     }
 
     #[test]
-    fn test_undo_caret_stays_when_before_affected_text() {
+    fn test_undo_caret_moves_to_affected_area() {
         test_util::setup_test();
         let mut b = Buffer::new_empty();
         let vp = Viewport::new_ginormeous();
@@ -487,7 +485,7 @@ mod test {
         b.move_carets(&vp, Motion::Up);
         b.undo();
         assert_eq!(
-            &Position { line: 0, col: 2 },
+            &Position { line: 0, col: 3 },
             b.all_caret_positions().first()
         );
     }
