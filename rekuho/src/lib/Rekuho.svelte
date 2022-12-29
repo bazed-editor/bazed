@@ -1,16 +1,11 @@
-<script
-  lang="ts"
-  context="module"
->
-</script>
-
 <script lang="ts">
   import { example as exampleTheme } from "./theme"
-  import { initSession, Session, type KeyInput } from "./rpc"
-  import { state, type CaretPosition } from "./core"
+  import type { KeyInput } from "./rpc"
+  import { initSession, Session } from "./rpc"
+  import type { CaretPosition } from "./core"
   import Portion from "./Portion.svelte"
 
-  export let width: number = 500
+  export let width: number = 50
   export let height: number = 500
 
   let theme = exampleTheme
@@ -20,14 +15,14 @@
     session = x
   })
 
-  function onKeyInput(input: CustomEvent<KeyInput>) {
+  const onKeyInput = (input: CustomEvent<KeyInput>) => {
     if (!session) {
       return
     }
     session.handleKeyPressed(input.detail)
   }
 
-  function onMouseDown(pos: CustomEvent<CaretPosition>) {
+  const onMouseDown = (pos: CustomEvent<CaretPosition>) => {
     if (!session) {
       return
     }
@@ -35,16 +30,12 @@
   }
 </script>
 
-<div
-  class="rekuho"
-  style:width
->
+<div class="rekuho">
   <Portion
     {theme}
-    on:keyinput={onKeyInput}
-    on:mousedown={onMouseDown}
-    lines={$state.lines}
     {width}
     {height}
+    on:keyinput={onKeyInput}
+    on:mousedown={onMouseDown}
   />
 </div>
