@@ -6,14 +6,14 @@
   import { createEventDispatcher } from "svelte"
   import type { Theme } from "./theme"
   import { measure as fontMeasure } from "./font"
-  import { state, type CaretPosition } from "./core"
+  import type { CaretPosition } from "./core"
+  import { state } from "./core"
   import type { Vector2 } from "./linearAlgebra"
   import type { Key, KeyInput, Modifier } from "./rpc"
 
   export let theme: Theme
   export let height: number
   export let width: number
-  export let lines: string[]
 
   const gutter_width = 50 // maybe should be part of theme, minimum value?
   let input: HTMLTextAreaElement
@@ -30,7 +30,7 @@
   $: view_rect = container && container.getBoundingClientRect()
 
   const pxToPortionPosition = ([x, y]: Vector2): Vector2 => {
-    const div = (x: number, y: number): number => Math.floor(x / y)
+    const div = (a: number, b: number): number => Math.floor(a / b)
     const column = div(x - view_rect.x, column_width)
     const line = div(y - view_rect.y, line_height)
     return [column, line]
@@ -43,7 +43,7 @@
 
   ////////////////////////////////////////////////////////////////////////////////
 
-  const mouseDown = (ev: MouseEvent) => {
+  const onMouseDown = (ev: MouseEvent) => {
     const [x, y] = pxToPortionPosition([ev.pageX, ev.pageY])
     onMouseClicked({ line: y, col: x })
     input.focus()
@@ -74,7 +74,7 @@
   }
   */
 
-  const keydown = (ev: KeyboardEvent) => {
+  const onKeyDown = (ev: KeyboardEvent) => {
     console.log(ev)
     const modifiers: Modifier[] = []
     if (ev.ctrlKey) modifiers.push("ctrl")
@@ -113,10 +113,6 @@
     }
   }
 
-  const gutter_mousedown = (line: number, _ev: MouseEvent) => {
-    onMouseClicked({ col: 0, line })
-  }
-
   ////////////////////////////////////////////////////////////////////////////////
 
   const transformToScreenPosition = ([x, y]: Vector2): Vector2 => [
@@ -125,19 +121,12 @@
   ]
 
   const longestLine = (text: string[]): string =>
-    text.length === 0 ? "" : text.reduce((a, b) => (a.length < b.length ? b : a))
+    text.reduce((a, b) => (a.length < b.length ? b : a), "")
 
-  let linesHeight: number
-  let linesWidth: number
-
-  $: linesHeight = lines.length * line_height
-  $: linesWidth = lines ? longestLine(lines).length : 1
-
-  let line_view_height: number
-  let line_view_width: number
+  $: lines_view_width = $state.lines ? longestLine($state.lines).length : 1
 
   $: text_view_width = width - gutter_width
-  $: text_to_visible_ratio = (line_view_width * column_width - theme.text_offset) / width
+  $: text_to_visible_ratio = (lines_view_width * column_width - theme.text_offset) / width
   $: vertical_scroller_width = text_view_width / text_to_visible_ratio
 </script>
 
@@ -153,12 +142,10 @@
     style:width="{gutter_width}px"
     style:height="{height}px"
   >
-    {#each lines as _, i}
+    {#each $state.lines as _, i}
       <div
         class="gutter-cell"
-        on:mousedown|preventDefault={(e) => {
-          gutter_mousedown(i, e)
-        }}
+        on:mousedown|preventDefault={(_) => onMouseClicked({ col: 0, line: i })}
         style:font-size={theme.font.size}
         style:height="{line_height}px"
         style:top="{i * line_height}px"
@@ -182,7 +169,7 @@
   <div
     bind:this={container}
     class="container"
-    on:mousedown|preventDefault={mouseDown}
+    on:mousedown|preventDefault={onMouseDown}
     on:mousemove={() => {}}
     on:mouseup={() => {}}
     style:background={theme.editor_background}
@@ -192,13 +179,13 @@
       bind:this={input}
       tabindex="-1"
       wrap="off"
-      on:keydown|preventDefault={keydown}
+      on:keydown|preventDefault={onKeyDown}
       style:user-select="text"
       style:position="absolute"
       style:width="{column_width}px"
     />
     <div class="lines-container">
-      {#each lines as line, i}
+      {#each $state.lines as line, i}
         <div
           class="line-container"
           style:top="{i * line_height}px"
