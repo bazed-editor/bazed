@@ -20,17 +20,6 @@ pub(crate) enum EditType {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub(crate) enum Operation {
-    Document(DocumentOp),
-    Buffer(BufferOp),
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub(crate) enum DocumentOp {
-    Save,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
 pub(crate) enum BufferOp {
     Insert(String),
     Delete(Trajectory),
