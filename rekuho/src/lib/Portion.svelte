@@ -106,6 +106,9 @@
       case "ArrowDown":
         key = "down"
         break
+      case "Escape":
+        key = "escape"
+        break
     }
 
     if (key) {
