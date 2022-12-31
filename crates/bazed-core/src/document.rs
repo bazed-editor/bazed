@@ -12,6 +12,7 @@ use xi_rope::Rope;
 use crate::{
     buffer::Buffer,
     view::{View, ViewId},
+    vim_interface::VimMode,
 };
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash, derive_more::Display, derive_more::Into)]
@@ -64,7 +65,12 @@ impl Document {
     /// damage tracking-style system that sends patches to the frontend.
     /// Additionally, this will later only send updates concerning
     /// the parts of the document that are currently visible / relevant in the frontend.
-    pub fn create_update_notification(&self, view_id: ViewId, view: &View) -> ToFrontend {
+    pub fn create_update_notification(
+        &self,
+        view_id: ViewId,
+        view: &View,
+        vim_mode: VimMode,
+    ) -> ToFrontend {
         let lines = self
             .buffer
             .lines_between(view.vp.first_line, view.vp.last_line())
@@ -77,6 +83,7 @@ impl Document {
             first_line: view.vp.first_line,
             height: view.vp.height,
             text: lines,
+            vim_mode: vim_mode.to_string(),
             carets: self
                 .buffer
                 .all_caret_positions()

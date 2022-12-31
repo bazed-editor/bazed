@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, derive_more::Display)]
-enum VimMode {
+pub enum VimMode {
     #[default]
     Normal,
     Insert,
@@ -17,7 +17,7 @@ enum VimMode {
 
 #[derive(Debug, Default)]
 pub(crate) struct VimInterface {
-    mode: VimMode,
+    pub(crate) mode: VimMode,
 }
 
 impl VimInterface {
