@@ -79,6 +79,11 @@ impl Buffer {
         self.text.lines(..).skip(low).take(high - low)
     }
 
+    /// Collapse all selections into carets at their respective heads
+    pub fn collapse_selections(&mut self) {
+        self.regions.collapse_selections();
+    }
+
     /// Snap all regions to the closest valid points in the buffer.
     ///
     /// This may be required if an action (such as undo, currently) changes the buffer
@@ -126,6 +131,16 @@ impl Buffer {
         }
         let delta = builder.build();
         self.commit_delta(delta, EditType::Insert);
+    }
+
+    /// Delete exactly the ranges of all carets (meaning that only selections will be affected)
+    fn delete_in_selections(&mut self) {
+        let mut builder = DeltaBuilder::new(self.text.len());
+        for region in self.regions.carets() {
+            builder.delete(region.range());
+        }
+        let delta = builder.build();
+        self.commit_delta(delta, EditType::Delete);
     }
 
     fn delete_at_carets(&mut self, traj: Trajectory) {
@@ -223,6 +238,7 @@ impl Buffer {
         match op {
             BufferOp::Insert(text) => self.insert_at_carets(&text),
             BufferOp::Delete(traj) => self.delete_at_carets(traj),
+            BufferOp::DeleteSelected => self.delete_in_selections(),
             BufferOp::Undo => self.undo(),
             BufferOp::Redo => self.redo(),
             BufferOp::Move(motion) => {
