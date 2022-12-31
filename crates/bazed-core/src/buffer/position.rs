@@ -1,6 +1,6 @@
 use xi_rope::Rope;
 
-/// Position in a [bazed_core::buffer::Buffer] by it's line and col.
+/// Position in a [crate::buffer::Buffer] by it's line and col.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position {
     pub line: usize,

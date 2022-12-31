@@ -84,7 +84,7 @@ impl Buffer {
     /// with [xi_rope::Transformer], or, in the case of undo, by remembering where the carets where before.
     ///
     /// **WARNING:** This is very much a temporary solution, as it _will_ cause inconsistent state as soon as we use
-    /// regions for more than just caret position. (see https://github.com/bazed-editor/bazed/issues/47)
+    /// regions for more than just caret position. (see <https://github.com/bazed-editor/bazed/issues/47>)
     fn snap_regions_to_valid_position(&mut self) {
         self.regions.update_regions(|_, region| {
             region.head = region.head.min(self.text.len());

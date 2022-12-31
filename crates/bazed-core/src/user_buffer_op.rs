@@ -1,4 +1,4 @@
-//! User-level operation that can be performed on a [Buffer].
+//! User-level operation that can be performed on a [crate::buffer::Buffer].
 //! This includes edit and movement operations.
 //! These will occur at the caret positions, and are thus only used for directly userfacing operations
 

@@ -1,4 +1,4 @@
-//! Map [KeyInput]s to [user_buffer_op]-Operations
+//! Map [KeyInput]s to [crate::user_buffer_op]-Operations
 
 use bazed_rpc::keycode::{Key, KeyInput};
 
