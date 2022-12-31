@@ -139,7 +139,11 @@ impl App {
                 .get(&view.document_id)
                 .ok_or(Error::InvalidDocumentId(view.document_id))?;
             self.event_send
-                .send_rpc(document.create_update_notification(view_id, view))
+                .send_rpc(document.create_update_notification(
+                    view_id,
+                    view,
+                    self.vim_interface.mode,
+                ))
                 .await?;
         }
         Ok(())
@@ -158,7 +162,7 @@ impl App {
             .on_input(view, &mut document.buffer, input);
 
         self.event_send
-            .send_rpc(document.create_update_notification(view_id, view))
+            .send_rpc(document.create_update_notification(view_id, view, self.vim_interface.mode))
             .await?;
         Ok(())
     }
@@ -176,7 +180,7 @@ impl App {
             .buffer
             .jump_caret_to_position(Position::new(coords.line, coords.col), false);
         self.event_send
-            .send_rpc(document.create_update_notification(view_id, view))
+            .send_rpc(document.create_update_notification(view_id, view, self.vim_interface.mode))
             .await?;
         Ok(())
     }

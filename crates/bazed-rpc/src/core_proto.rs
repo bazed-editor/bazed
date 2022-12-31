@@ -34,6 +34,7 @@ pub enum ToFrontend {
         text: Vec<String>,
         /// caret positions are absolute
         carets: Vec<CaretPosition>,
+        vim_mode: String,
     },
     /// Response to the [ToBackend::ViewOpened] request
     ViewOpenedResponse {
