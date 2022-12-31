@@ -145,6 +145,11 @@ impl BufferRegions {
         }
     }
 
+    pub(super) fn collapse_selections(&mut self) {
+        self.update_carets(|_, c| {
+            c.tail = c.head;
+        });
+    }
     pub(super) fn collapse_carets_into_primary(&mut self) {
         for id in self.carets.drain(..) {
             if id != self.primary_caret_id {

@@ -25,6 +25,7 @@ pub(crate) enum BufferOp {
     Delete(Trajectory),
     Undo,
     Redo,
+    DeleteSelected,
     Move(Motion),
     /// Expand or change the selection
     Selection(Motion),

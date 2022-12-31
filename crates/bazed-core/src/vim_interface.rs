@@ -12,6 +12,7 @@ enum VimMode {
     #[default]
     Normal,
     Insert,
+    Visual,
 }
 
 #[derive(Debug, Default)]
@@ -22,8 +23,9 @@ pub(crate) struct VimInterface {
 impl VimInterface {
     pub(crate) fn on_input(&mut self, view: &View, buffer: &mut Buffer, input: KeyInput) {
         match self.mode {
-            VimMode::Normal => self.on_input_normal_mode(view, buffer, input),
-            VimMode::Insert => self.on_input_insert_mode(view, buffer, input),
+            VimMode::Normal => self.on_input_normal_mode(view, buffer, &input),
+            VimMode::Insert => self.on_input_insert_mode(view, buffer, &input),
+            VimMode::Visual => self.on_input_visual_mode(view, buffer, &input),
         }
     }
 
@@ -31,13 +33,15 @@ impl VimInterface {
         &mut self,
         view: &View,
         buffer: &mut Buffer,
-        input: KeyInput,
+        input: &KeyInput,
     ) {
-        if self.on_movement_key(view, buffer, &input) {
+        if let Some(motion) = key_to_motion_normal(input.ctrl_held(), &input.key) {
+            buffer.apply_buffer_op(&view.vp, BufferOp::Move(motion));
             return;
         }
         match input.key {
             Key::Char('i') => self.switch_mode(VimMode::Insert),
+            Key::Char('v') => self.switch_mode(VimMode::Visual),
             Key::Char('w') => buffer.apply_buffer_op(
                 &view.vp,
                 BufferOp::Move(Motion::NextWordBoundary(WordBoundaryType::Start)),
@@ -50,6 +54,9 @@ impl VimInterface {
                 &view.vp,
                 BufferOp::Move(Motion::NextWordBoundary(WordBoundaryType::End)),
             ),
+            Key::Char('x') => {
+                buffer.apply_buffer_op(&view.vp, BufferOp::Delete(Trajectory::Forwards))
+            },
             Key::Char('u') => buffer.apply_buffer_op(&view.vp, BufferOp::Undo),
             Key::Char('r') if input.ctrl_held() => buffer.apply_buffer_op(&view.vp, BufferOp::Redo),
             Key::Char('0') => buffer.apply_buffer_op(&view.vp, BufferOp::Move(Motion::StartOfLine)),
@@ -62,7 +69,7 @@ impl VimInterface {
         &mut self,
         view: &View,
         buffer: &mut Buffer,
-        input: KeyInput,
+        input: &KeyInput,
     ) {
         if self.on_movement_key(view, buffer, &input) {
             return;
@@ -80,12 +87,41 @@ impl VimInterface {
         }
     }
 
+    pub(crate) fn on_input_visual_mode(
+        &mut self,
+        view: &View,
+        buffer: &mut Buffer,
+        input: &KeyInput,
+    ) {
+        if let Some(motion) = key_to_motion_normal(input.ctrl_held(), &input.key) {
+            buffer.apply_buffer_op(&view.vp, BufferOp::Selection(motion));
+            return;
+        }
+        match input.key {
+            Key::Escape => {
+                self.mode = VimMode::Normal;
+                buffer.collapse_selections();
+            },
+            Key::Char('d') | Key::Char('x') => {
+                buffer.apply_buffer_op(&view.vp, BufferOp::DeleteSelected);
+            },
+            _ => {
+                if let Some(motion) = key_to_motion(input.ctrl_held(), &input.key) {
+                    buffer.apply_buffer_op(&view.vp, BufferOp::Selection(motion));
+                }
+            },
+        }
+    }
+
+    /// Handle regular movement keys (usable for normal and insert mode)
     fn on_movement_key(&mut self, view: &View, buffer: &mut Buffer, input: &KeyInput) -> bool {
-        let op = match key_to_motion(input.ctrl_held(), &input.key) {
-            Some(motion) if input.shift_held() => BufferOp::Selection(motion),
-            Some(motion) if input.alt_held() => BufferOp::NewCaret(motion),
-            Some(motion) => BufferOp::Move(motion),
-            _ => return false,
+        let Some(motion) = key_to_motion(input.ctrl_held(), &input.key)  else {
+            return false;
+        };
+        let op = if input.alt_held() {
+            BufferOp::NewCaret(motion)
+        } else {
+            BufferOp::Move(motion)
         };
         buffer.apply_buffer_op(&view.vp, op);
         true
@@ -94,6 +130,26 @@ impl VimInterface {
     fn switch_mode(&mut self, mode: VimMode) {
         self.mode = mode;
     }
+}
+
+/// Map a movement key into the corresponding [Motion], assuming normal mode
+fn key_to_motion_normal(ctrl_held: bool, key: &Key) -> Option<Motion> {
+    if let Some(motion) = key_to_motion(ctrl_held, key) {
+        return Some(motion);
+    }
+    return Some(match key {
+        Key::Char('w') => Motion::NextWordBoundary(WordBoundaryType::Start),
+        Key::Char('b') => Motion::PrevWordBoundary(WordBoundaryType::Start),
+        Key::Char('e') => Motion::NextWordBoundary(WordBoundaryType::End),
+
+        Key::Char('h') => Motion::Left,
+        Key::Char('l') => Motion::Right,
+        Key::Char('k') => Motion::Up,
+        Key::Char('j') => Motion::Down,
+        Key::Char('0') => Motion::StartOfLine,
+        Key::Char('$') => Motion::EndOfLine,
+        _ => return None,
+    });
 }
 
 /// Map a movement key into the corresponding [Motion].
