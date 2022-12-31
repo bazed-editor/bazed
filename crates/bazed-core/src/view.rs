@@ -16,9 +16,9 @@ impl ViewId {
 
 // TODO this will need to also account for variable-width fonts, ligatures as well as tab characters in the future.
 
-/// A view represents a part of a [Buffer] that is shown by a client.
+/// A view represents a part of a [crate::buffer::Buffer] that is shown by a client.
 pub struct View {
-    /// Id of the [Document] this view looks into
+    /// Id of the [crate::document::Document] this view looks into
     pub document_id: DocumentId,
     /// Viewport of this view
     pub vp: Viewport,
@@ -33,7 +33,7 @@ impl View {
     }
 }
 
-/// Information about which part of a [Buffer] is visible to the client.
+/// Information about which part of a [crate::buffer::Buffer] is visible to the client.
 /// Currently only vertical position and height is considered.
 pub struct Viewport {
     /// Index of the first line shown in the viewport
