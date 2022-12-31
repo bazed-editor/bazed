@@ -52,3 +52,16 @@ fn cargo_deny_check() {
 
     assert!(output.status.success());
 }
+
+#[test]
+fn cargo_doc_check() {
+    let output = Command::new("cargo")
+        .args(["doc", "--no-deps", "--document-private-items"])
+        .current_dir(project_root())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+}
