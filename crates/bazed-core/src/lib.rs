@@ -4,10 +4,10 @@
 pub mod app;
 pub mod buffer;
 pub mod document;
-mod input_mapper;
 pub mod region;
 mod user_buffer_op;
 pub mod view;
+mod vim_interface;
 mod word_boundary;
 
 #[cfg(test)]

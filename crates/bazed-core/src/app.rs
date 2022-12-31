@@ -13,9 +13,8 @@ use tokio::sync::RwLock;
 use crate::{
     buffer::position::Position,
     document::{Document, DocumentId},
-    input_mapper::interpret_key_input,
-    user_buffer_op::{DocumentOp, Operation},
     view::{View, ViewId, Viewport},
+    vim_interface::VimInterface,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -30,6 +29,7 @@ pub struct App {
     documents: HashMap<DocumentId, Document>,
     views: HashMap<ViewId, View>,
     event_send: ClientSendHandle,
+    vim_interface: VimInterface,
 }
 
 impl App {
@@ -38,6 +38,7 @@ impl App {
             documents: HashMap::new(),
             event_send,
             views: HashMap::new(),
+            vim_interface: VimInterface::default(),
         }
     }
 
@@ -153,16 +154,9 @@ impl App {
             .get_mut(&view.document_id)
             .ok_or(Error::InvalidDocumentId(view.document_id))?;
 
-        let Some(operation) = interpret_key_input(&input) else {
-            tracing::info!("Ignoring unhandled key input: {input:?}");
-            return Ok(())
-        };
-        match operation {
-            Operation::Document(op) => match op {
-                DocumentOp::Save => document.write_to_file().await?,
-            },
-            Operation::Buffer(op) => document.buffer.apply_buffer_op(&view.vp, op),
-        }
+        self.vim_interface
+            .on_input(view, &mut document.buffer, input);
+
         self.event_send
             .send_rpc(document.create_update_notification(view_id, view))
             .await?;
