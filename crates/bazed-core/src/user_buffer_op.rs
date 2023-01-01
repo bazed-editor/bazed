@@ -20,24 +20,24 @@ pub(crate) enum EditType {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum BufferOp {
+pub(crate) enum BufferOp<'a> {
     Insert(String),
     Delete(Trajectory),
     Undo,
     Redo,
     DeleteSelected,
-    Move(Motion),
+    Move(Motion<'a>),
     /// Expand or change the selection
-    Selection(Motion),
+    Selection(Motion<'a>),
     /// Create a new cursor at the location the motion targets
-    NewCaret(Motion),
+    NewCaret(Motion<'a>),
 }
 
 /// A motion, either character-wise or defined by some higher-level semantic target.
 /// Conceptually similar to motions in vim (`w`, `t$`)
 #[allow(unused)]
-#[derive(Debug, Clone)]
-pub(crate) enum Motion {
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum Motion<'a> {
     Left,
     Right,
     Up,
@@ -48,6 +48,6 @@ pub(crate) enum Motion {
     BottomOfViewport,
     NextWordBoundary(WordBoundaryType),
     PrevWordBoundary(WordBoundaryType),
-    FindNext(hotsauce::Regex),
-    FindPrev(hotsauce::Regex),
+    FindNext(&'a hotsauce::Regex),
+    FindPrev(&'a hotsauce::Regex),
 }

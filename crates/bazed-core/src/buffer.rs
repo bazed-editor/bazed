@@ -248,13 +248,13 @@ impl Buffer {
                 self.move_carets(vp, motion);
             },
             BufferOp::Selection(motion) => self.regions.update_carets(|_, region| {
-                *region = apply_motion_to_region(&self.text, vp, *region, true, &motion);
+                *region = apply_motion_to_region(&self.text, vp, *region, true, motion);
             }),
             BufferOp::NewCaret(motion) => {
                 let carets = self.regions.carets();
                 let primary_caret = carets.first();
                 let new_caret =
-                    apply_motion_to_region(&self.text, vp, *primary_caret, false, &motion);
+                    apply_motion_to_region(&self.text, vp, *primary_caret, false, motion);
                 if &new_caret != primary_caret {
                     self.regions.add_caret(true, new_caret);
                 }
@@ -265,7 +265,7 @@ impl Buffer {
     /// Move carets by a given motion, collapsing any selections down into carets.
     pub(crate) fn move_carets(&mut self, viewport: &Viewport, motion: Motion) {
         self.regions.update_carets(|_, region| {
-            *region = apply_motion_to_region(&self.text, viewport, *region, false, &motion);
+            *region = apply_motion_to_region(&self.text, viewport, *region, false, motion);
         })
     }
 }
