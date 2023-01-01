@@ -9,7 +9,7 @@
 //! Terminology of `Region`s and `Carets` etc. is specified in [BufferRegions].
 
 use nonempty::NonEmpty;
-use xi_rope::{engine::Engine, DeltaBuilder, Rope, RopeDelta};
+use xi_rope::{engine::Engine, DeltaBuilder, Rope, RopeDelta, RopeInfo};
 
 use self::{
     buffer_regions::BufferRegions, movement::apply_motion_to_region, position::Position,
@@ -57,16 +57,29 @@ impl Buffer {
         self.engine.get_head().to_string()
     }
 
+    pub fn len(&self) -> usize {
+        self.text.len()
+    }
+
     /// Return a snapshot of the latest commited state of the text
     pub fn head_rope(&self) -> &Rope {
         self.engine.get_head()
     }
 
+    /// Return all regions corresponding to carets or selections
+    pub fn all_carets(&self) -> NonEmpty<Region> {
+        self.regions.carets()
+    }
+
     pub fn all_caret_positions(&self) -> NonEmpty<Position> {
-        self.regions.carets().map(|x| {
+        self.all_carets().map(|x| {
             Position::from_offset(&self.text, x.head)
                 .expect("Caret stored in BufferRegions was not a valid offset into the buffer")
         })
+    }
+
+    pub fn start_building_delta(&self) -> DeltaBuilder<RopeInfo> {
+        DeltaBuilder::new(self.text.len())
     }
 
     /// get the lines in the given inclusive range
@@ -102,7 +115,7 @@ impl Buffer {
     }
 
     #[tracing::instrument(skip(self), fields(head_rev_id = ?self.engine.get_head_rev_id()))]
-    fn commit_delta(&mut self, delta: RopeDelta, edit_type: EditType) -> Rope {
+    pub fn commit_delta(&mut self, delta: RopeDelta, edit_type: EditType) -> Rope {
         tracing::debug!("Committing delta");
         self.regions.apply_delta(&delta);
 
@@ -132,6 +145,21 @@ impl Buffer {
         }
         let delta = builder.build();
         self.commit_delta(delta, EditType::Insert);
+    }
+
+    /// replace the characters at the carets with the given chars,
+    /// basically treating them as length 1 selections
+    pub fn replace_at_carets(&mut self, chars: &str) {
+        let mut builder = DeltaBuilder::new(self.text.len());
+        for region in self.all_carets() {
+            let range = region.range();
+            if range.end == self.text.len() {
+                continue;
+            }
+            builder.replace(range.start..(range.end + 1), Rope::from(chars));
+        }
+        let delta = builder.build();
+        self.commit_delta(delta, EditType::Replace);
     }
 
     /// Delete exactly the ranges of all carets (meaning that only selections will be affected)
@@ -283,6 +311,31 @@ mod test {
         b.insert_at_carets("hel");
         b.insert_at_carets("lo");
         assert_eq!("hello", b.content_to_string());
+    }
+
+    #[test]
+    fn test_replace_at_caret() {
+        test_util::setup_test();
+        let mut b = Buffer::new_empty();
+        b.insert_at_carets("hello");
+        b.regions.set_primary_caret(Region::sticky_cursor(2));
+        b.replace_at_carets("y");
+        b.replace_at_carets("h");
+        assert_eq!("heyho", b.content_to_string());
+    }
+
+    #[test]
+    fn test_replace_at_caret_end_of_buffer() {
+        test_util::setup_test();
+        let mut b = Buffer::new_empty();
+        b.insert_at_carets("hello");
+        b.regions.set_primary_caret(Region::sticky_cursor(5));
+        b.replace_at_carets("X");
+        assert_eq!(
+            "hello",
+            b.content_to_string(),
+            "Nothing changes when replacing at end of buffer"
+        );
     }
 
     #[test]
