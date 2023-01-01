@@ -162,7 +162,11 @@ impl<I: Iterator<Item = char>> Iterator for WordBoundaries<I> {
 }
 
 /// Returns an iterator that reverses over chunks of the rope.
-fn iter_rope_chunks_reverse<T: IntervalBounds>(rope: &Rope, range: T) -> ReverseChunkIter {
+/// **Note** that the chunks contents are still ordered left to right.
+pub(crate) fn iter_rope_chunks_reverse<T: IntervalBounds>(
+    rope: &Rope,
+    range: T,
+) -> ReverseChunkIter {
     let Interval { start, end } = range.into_interval(rope.len());
     ReverseChunkIter {
         cursor: Cursor::new(rope, end),
@@ -171,8 +175,9 @@ fn iter_rope_chunks_reverse<T: IntervalBounds>(rope: &Rope, range: T) -> Reverse
     }
 }
 
-/// More or less a copy of [xi_rope::rope::ChunkIter], but traversing the rope in reverse order
-struct ReverseChunkIter<'a> {
+/// More or less a copy of [xi_rope::rope::ChunkIter], but traversing the ropes chunks in reverse order.
+/// **Note** that the chunks contents are still ordered left to right.
+pub(crate) struct ReverseChunkIter<'a> {
     cursor: Cursor<'a, RopeInfo>,
     cursor_at_end: bool,
     min: usize,
@@ -202,7 +207,7 @@ impl<'a> Iterator for ReverseChunkIter<'a> {
 mod test {
     use xi_rope::Rope;
 
-    use super::WordBoundaries;
+    use super::{iter_rope_chunks_reverse, WordBoundaries};
     use crate::{
         test_util,
         word_boundary::{find_word_boundaries, find_word_boundaries_backwards, WordBoundaryType},
@@ -244,6 +249,31 @@ mod test {
         assert_eq!(
             vec![(5, Start), (4, End), (1, Start), (0, Both)],
             find_word_boundaries_backwards(&Rope::from(" foo foo..."), 7).collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn test_reverse_chunks_iter() {
+        test_util::setup_test();
+        assert_eq!(
+            "0123",
+            iter_rope_chunks_reverse(&"0123".into(), ..).collect::<String>()
+        );
+        assert_eq!(
+            "01",
+            iter_rope_chunks_reverse(&"0123".into(), ..2).collect::<String>()
+        );
+        assert_eq!(
+            "23",
+            iter_rope_chunks_reverse(&"0123".into(), 2..).collect::<String>()
+        );
+        assert_eq!(
+            "12",
+            iter_rope_chunks_reverse(&"0123".into(), 1..3).collect::<String>()
+        );
+        assert_eq!(
+            "0123",
+            iter_rope_chunks_reverse(&"0123".into(), 0..4).collect::<String>()
         );
     }
 }
