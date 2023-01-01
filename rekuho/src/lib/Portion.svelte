@@ -4,22 +4,27 @@
 -->
 <script lang="ts">
   import { createEventDispatcher } from "svelte"
-  import type { Theme } from "./theme"
-  import { measure as fontMeasure } from "./font"
+
   import type { CaretPosition } from "./core"
   import { state } from "./core"
+
+  import type { Theme } from "./theme"
+  import { measureOnChild as fontMeasure, fontToString } from "./font"
   import type { Vector2 } from "./linearAlgebra"
-  import type { Key, KeyInput, Modifier } from "./rpc"
+  import type { KeyInput } from "./rpc"
+  import { keyboardToKeyInput } from "./event"
 
   export let theme: Theme
-  export let height: number
-  export let width: number
 
-  const gutter_width = 50 // maybe should be part of theme, minimum value?
+  let width: number
+  let height: number
+
+  const gutterWidth = 50 // TODO: maybe should be part of theme, minimum value?
   let input: HTMLTextAreaElement
-  let container: Element
+  let container: HTMLElement
 
   const dispatch = createEventDispatcher<{
+    resize: [number, number]
     keyinput: KeyInput
     mousedown: CaretPosition
   }>()
@@ -27,19 +32,40 @@
   const emitKeyboardInput = (input: KeyInput) => dispatch("keyinput", input)
   const onMouseClicked = (pos: CaretPosition) => dispatch("mousedown", pos)
 
-  $: view_rect = container && container.getBoundingClientRect()
+  ////////////////////////////////////////////////////////////////////////////////
+
+  $: viewRect = container?.getBoundingClientRect()
 
   const pxToPortionPosition = ([x, y]: Vector2): Vector2 => {
     const div = (a: number, b: number): number => Math.floor(a / b)
-    const column = div(x - view_rect.x, column_width)
-    const line = div(y - view_rect.y, line_height)
+    const column = div(x - viewRect.x, columnWidth)
+    const line = div(y - viewRect.y, lineHeight)
     return [column, line]
   }
 
-  const font = theme.font
-  const font_metrics = fontMeasure(`${font.weight} ${font.size} ${font.family}`)
-  const line_height: number = font_metrics.actualHeight || 0
-  const column_width: number = font_metrics.width || 0
+  type Pixels = number
+
+  let lineHeight: Pixels
+  let columnWidth: Pixels
+
+  $: if (container) {
+    const fontMetrics = fontMeasure(container, fontToString(theme.font))
+    lineHeight = fontMetrics.actualHeight ?? 0
+    columnWidth = fontMetrics.width ?? 0
+  }
+
+  $: lineCount = Math.ceil(height / lineHeight)
+  $: columnCount = Math.ceil(width / columnWidth)
+
+  const transformToScreenPosition = ([x, y]: Vector2): Vector2 => [x * columnWidth, y * lineHeight]
+
+  const longestLine = (text: string[]): string =>
+    text.reduce((a, b) => (a.length < b.length ? b : a), "")
+
+  $: linesViewWidth = $state.lines ? longestLine($state.lines).length : 1
+  $: textViewWidth = width - gutterWidth
+  $: textToVisibleRatio = (linesViewWidth * columnWidth - theme.textOffset) / width
+  $: verticalScrollerWidth = textViewWidth / textToVisibleRatio
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -49,100 +75,27 @@
     input.focus()
   }
 
-  // TODO: mouse-based selection in the backend yet, :ree:
-
-  /*
-  const mousedown = (ev: MouseEvent) => {
-    const current = pxToPortionPosition([ev.pageX, ev.pageY])
-    selection = current
-    cursorUpdate(0, (_) => current)
-    input.focus()
-  }
-
-  const mouseup = (ev: MouseEvent) => {
-    if (selection) {
-      const begin = selection
-      selection = null
-      const end = pxToPortionPosition([ev.pageX, ev.pageY])
+  const onKeyDown = (domEvent: KeyboardEvent) => {
+    console.log(domEvent)
+    const event = keyboardToKeyInput(domEvent)
+    if (event) {
+      emitKeyboardInput(event)
     }
   }
 
-  const mousemove = (ev: MouseEvent) => {
-    if (selection) {
-      cursorUpdate(0, (_) => pxToPortionPosition([ev.pageX, ev.pageY]))
-    }
-  }
-  */
-
-  const onKeyDown = (ev: KeyboardEvent) => {
-    console.log(ev)
-    const modifiers: Modifier[] = []
-    if (ev.ctrlKey) modifiers.push("ctrl")
-    if (ev.shiftKey) modifiers.push("shift")
-    if (ev.altKey) modifiers.push("alt")
-    if (ev.metaKey) modifiers.push("win")
-
-    let key: Key | null = null
-    if (ev.key.length === 1) {
-      key = { char: ev.key }
-    }
-
-    switch (ev.key) {
-      case "Enter":
-        key = "return"
-        break
-      case "Backspace":
-        key = "backspace"
-        break
-      case "ArrowLeft":
-        key = "left"
-        break
-      case "ArrowRight":
-        key = "right"
-        break
-      case "ArrowUp":
-        key = "up"
-        break
-      case "ArrowDown":
-        key = "down"
-        break
-      case "Escape":
-        key = "escape"
-        break
-    }
-
-    if (key) {
-      emitKeyboardInput({ modifiers, key })
-    }
-  }
-
-  ////////////////////////////////////////////////////////////////////////////////
-
-  const transformToScreenPosition = ([x, y]: Vector2): Vector2 => [
-    x * column_width,
-    y * line_height,
-  ]
-
-  const longestLine = (text: string[]): string =>
-    text.reduce((a, b) => (a.length < b.length ? b : a), "")
-
-  $: lines_view_width = $state.lines ? longestLine($state.lines).length : 1
-
-  $: text_view_width = width - gutter_width
-  $: text_to_visible_ratio = (lines_view_width * column_width - theme.text_offset) / width
-  $: vertical_scroller_width = text_view_width / text_to_visible_ratio
+  $: dispatch("resize", [columnCount, lineCount])
 </script>
 
 <div
+  bind:clientWidth={width}
+  bind:clientHeight={height}
   class="view"
-  style:width="{width}px"
-  style:height="{height}px"
 >
   <!-- TODO: refactor into `Gutter.svelte` -->
   <div
     class="gutter"
     style:background={theme.gutter.background}
-    style:width="{gutter_width}px"
+    style:width="{gutterWidth}px"
     style:height="{height}px"
   >
     {#each $state.lines as _, i}
@@ -150,8 +103,8 @@
         class="gutter-cell"
         on:mousedown|preventDefault={(_) => onMouseClicked({ col: 0, line: i })}
         style:font-size={theme.font.size}
-        style:height="{line_height}px"
-        style:top="{i * line_height}px"
+        style:height="{lineHeight}px"
+        style:top="{i * lineHeight}px"
       >
         {i + 1}
       </div>
@@ -164,9 +117,9 @@
     style:position="absolute"
     style:height="{height}px"
     style:top="0"
-    style:background={theme.editor_background}
-    style:width="{theme.text_offset}px"
-    style:left="{gutter_width}px"
+    style:background={theme.editorBackground}
+    style:width="{theme.textOffset}px"
+    style:left="{gutterWidth}px"
   />
 
   <div
@@ -175,8 +128,8 @@
     on:mousedown|preventDefault={onMouseDown}
     on:mousemove={() => {}}
     on:mouseup={() => {}}
-    style:background={theme.editor_background}
-    style:left="{gutter_width + theme.text_offset}px"
+    style:background={theme.editorBackground}
+    style:left="{gutterWidth + theme.textOffset}px"
   >
     <textarea
       bind:this={input}
@@ -185,22 +138,22 @@
       on:keydown|preventDefault={onKeyDown}
       style:user-select="text"
       style:position="absolute"
-      style:width="{column_width}px"
+      style:width="{columnWidth}px"
     />
     <div class="lines-container">
       {#each $state.lines as line, i}
         <div
           class="line-container"
-          style:top="{i * line_height}px"
-          style:height="{line_height}px"
+          style:top="{i * lineHeight}px"
+          style:height="{lineHeight}px"
         >
           <span
             class="line-view"
             style:font-family={theme.font.family}
             style:font-size={theme.font.size}
-            style:color={theme.text_color}
-            style:height="{line_height}px"
-            style:line-height="{line_height}px"
+            style:color={theme.textColor}
+            style:height="{lineHeight}px"
+            style:line-height="{lineHeight}px"
           >
             {line}
           </span>
@@ -215,9 +168,9 @@
           class="cursor"
           id="cursor-{i}"
           style:visibility="inherit"
-          style:width="{column_width}px"
-          style:height="{line_height}px"
-          style:background={theme.primary_cursor_color}
+          style:width="{columnWidth}px"
+          style:height="{lineHeight}px"
+          style:background={theme.primaryCursorColor}
           style:left="{x}px"
           style:top="{y}px"
         />
@@ -225,30 +178,33 @@
     </div>
   </div>
 
-  <!-- TODO: Implement scrollbars -->
-  <!-- <Scrollbar /> -->
-  <!-- <Scrollbar /> -->
-  <div
-    class="scrollbar vertical"
-    style:height="{theme.scrollbar_width}px"
-    style:width="{width - gutter_width}px"
-    style:left="{gutter_width}px"
-    style:top="{height - theme.scrollbar_width}px"
-  >
+  <!-- TODO: Implement vertical scrollbar and scrolling -->
+  <!-- <VerticalScrollbar /> -->
+  {#if textToVisibleRatio > 1}
     <div
-      class="scroller"
-      on:mousedown|preventDefault={(_) => {}}
-      style:height="{theme.scrollbar_width}px"
-      style:width="{vertical_scroller_width}px"
-      style:background="#FFFFFF"
-    />
-  </div>
+      class="scrollbar vertical"
+      style:height="{theme.scrollbarWidth}px"
+      style:width="{width - gutterWidth}px"
+      style:left="{gutterWidth}px"
+      style:top="{height - theme.scrollbarWidth}px"
+    >
+      <div
+        class="scroller"
+        on:mousedown|preventDefault={(_) => {}}
+        style:height="{theme.scrollbarWidth}px"
+        style:width="{verticalScrollerWidth}px"
+        style:background="#FFFFFF"
+      />
+    </div>
+  {/if}
 </div>
 
 <style>
   .view {
     position: relative;
     overflow: hidden;
+    width: 100%;
+    height: 100%;
   }
 
   .scrollbar {

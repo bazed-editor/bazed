@@ -2,6 +2,7 @@ import { writable } from "svelte/store"
 
 export type CaretPosition = { line: number; col: number }
 
+/** cached state from backend */
 export type State = {
   document_id: string | null
   view_id: string | null
@@ -11,6 +12,7 @@ export type State = {
   carets: CaretPosition[]
 }
 
+/** store, holding cached state from backend */
 export const state = writable<State>({
   document_id: null,
   view_id: null,
@@ -20,6 +22,7 @@ export const state = writable<State>({
   carets: [],
 })
 
+/** update stored cached state */
 export const updateState = <K extends keyof State>(field: K, value: State[K]) => {
   state.update((s) => ({ ...s, [field]: value }))
 }
