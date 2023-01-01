@@ -13,7 +13,7 @@ pub(crate) fn apply_motion_to_region(
     vp: &Viewport,
     region: Region,
     only_move_head: bool,
-    motion: &Motion,
+    motion: Motion,
 ) -> Region {
     // The column the new region wants to be in
     // set when moving vertically, for use when coming out of a shorter line.
@@ -130,7 +130,7 @@ mod test {
                 &vp,
                 Region::sticky_cursor(1),
                 false,
-                &Motion::FindNext(Regex::new("b.r").unwrap())
+                Motion::FindNext(&Regex::new("b.r").unwrap())
             )
             .head
         );
@@ -141,7 +141,7 @@ mod test {
                 &vp,
                 Region::sticky_cursor(4),
                 false,
-                &Motion::FindNext(Regex::new("b.r").unwrap())
+                Motion::FindNext(&Regex::new("b.r").unwrap())
             )
             .head
         );
@@ -152,7 +152,7 @@ mod test {
                 &vp,
                 Region::sticky_cursor(4),
                 false,
-                &Motion::FindNext(Regex::new("XXX").unwrap())
+                Motion::FindNext(&Regex::new("XXX").unwrap())
             )
             .head,
             "FindNext does nothing when there is no match"
@@ -171,7 +171,7 @@ mod test {
                 &vp,
                 Region::sticky_cursor(11),
                 false,
-                &Motion::FindPrev(Regex::new("b.r").unwrap())
+                Motion::FindPrev(&Regex::new("b.r").unwrap())
             )
             .head
         );
@@ -182,7 +182,7 @@ mod test {
                 &vp,
                 Region::sticky_cursor(8),
                 false,
-                &Motion::FindPrev(Regex::new("b.r").unwrap())
+                Motion::FindPrev(&Regex::new("b.r").unwrap())
             )
             .head
         );
@@ -193,7 +193,7 @@ mod test {
                 &vp,
                 Region::sticky_cursor(4),
                 false,
-                &Motion::FindPrev(Regex::new("XXX").unwrap())
+                Motion::FindPrev(&Regex::new("XXX").unwrap())
             )
             .head,
             "FindPrev does nothing when there is no match"
@@ -209,20 +209,20 @@ mod test {
         let motion_end = Motion::NextWordBoundary(WordBoundaryType::End);
         assert_eq!(
             5,
-            apply_motion_to_region(&t, &vp, Region::sticky_cursor(1), false, &motion_end).head
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(1), false, motion_end).head
         );
         assert_eq!(
             6,
-            apply_motion_to_region(&t, &vp, Region::sticky_cursor(1), false, &motion_start).head
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(1), false, motion_start).head
         );
         assert_eq!(
             12,
-            apply_motion_to_region(&t, &vp, Region::sticky_cursor(6), false, &motion_start).head,
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(6), false, motion_start).head,
             "Next word boundary should move you, even when starting on a word bounadry",
         );
         assert_eq!(
             17,
-            apply_motion_to_region(&t, &vp, Region::sticky_cursor(13), false, &motion_end).head,
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(13), false, motion_end).head,
             "End of the string should be seen as a boundary when moving forwards",
         );
     }
@@ -236,25 +236,25 @@ mod test {
         let motion_end = Motion::PrevWordBoundary(WordBoundaryType::End);
         assert_eq!(
             0,
-            apply_motion_to_region(&t, &vp, Region::sticky_cursor(3), false, &motion_start).head,
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(3), false, motion_start).head,
             "Start of the string should be seen as a boundary when moving backwards",
         );
         assert_eq!(
             0,
-            apply_motion_to_region(&t, &vp, Region::sticky_cursor(3), false, &motion_start).head,
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(3), false, motion_start).head,
             "Start of the string should be seen as a boundary when moving backwards",
         );
         assert_eq!(
             5,
-            apply_motion_to_region(&t, &vp, Region::sticky_cursor(8), false, &motion_end).head
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(8), false, motion_end).head
         );
         assert_eq!(
             6,
-            apply_motion_to_region(&t, &vp, Region::sticky_cursor(8), false, &motion_start).head
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(8), false, motion_start).head
         );
         assert_eq!(
             0,
-            apply_motion_to_region(&t, &vp, Region::sticky_cursor(6), false, &motion_start).head
+            apply_motion_to_region(&t, &vp, Region::sticky_cursor(6), false, motion_start).head
         );
     }
 }
