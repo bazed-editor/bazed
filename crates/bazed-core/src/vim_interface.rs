@@ -13,6 +13,7 @@ pub enum VimMode {
     Normal,
     Insert,
     Visual,
+    Replace,
 }
 
 #[derive(Debug, Default)]
@@ -26,6 +27,7 @@ impl VimInterface {
             VimMode::Normal => self.on_input_normal_mode(view, buffer, &input),
             VimMode::Insert => self.on_input_insert_mode(view, buffer, &input),
             VimMode::Visual => self.on_input_visual_mode(view, buffer, &input),
+            VimMode::Replace => self.on_input_replace_mode(view, buffer, &input),
         }
     }
 
@@ -42,6 +44,7 @@ impl VimInterface {
         match input.key {
             Key::Char('i') => self.switch_mode(VimMode::Insert),
             Key::Char('v') => self.switch_mode(VimMode::Visual),
+            Key::Char('r') if input.shift_held() => self.switch_mode(VimMode::Replace),
             Key::Char('w') => buffer.apply_buffer_op(
                 &view.vp,
                 BufferOp::Move(Motion::NextWordBoundary(WordBoundaryType::Start)),
@@ -110,6 +113,24 @@ impl VimInterface {
                     buffer.apply_buffer_op(&view.vp, BufferOp::Selection(motion));
                 }
             },
+        }
+    }
+
+    pub(crate) fn on_input_replace_mode(
+        &mut self,
+        view: &View,
+        buffer: &mut Buffer,
+        input: &KeyInput,
+    ) {
+        if self.on_movement_key(view, buffer, input) {
+            return;
+        }
+        match input.key {
+            Key::Escape => {
+                self.mode = VimMode::Normal;
+            },
+            Key::Char(c) => buffer.replace_at_carets(&c.to_string()),
+            _ => {},
         }
     }
 

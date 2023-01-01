@@ -12,9 +12,10 @@ pub(crate) enum Trajectory {
 
 /// Category of an edit, used for grouping operations into undo-groups
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum EditType {
+pub enum EditType {
     Insert,
     Delete,
+    Replace,
     /// Catch-all type for any operation that shouldn't be grouped at all
     Other,
 }
