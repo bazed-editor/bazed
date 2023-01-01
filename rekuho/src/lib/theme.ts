@@ -73,11 +73,11 @@ export type Gutter = {
 export type Theme = {
   font: Font
   gutter: Gutter
-  scrollbar_width: number
-  text_color: string
-  text_offset: number
-  primary_cursor_color: string
-  editor_background: string
+  scrollbarWidth: number
+  textColor: string
+  textOffset: number
+  primaryCursorColor: string
+  editorBackground: string
 }
 
 export const example: Theme = {
@@ -92,9 +92,9 @@ export const example: Theme = {
     width: 50,
   },
 
-  scrollbar_width: 12,
-  text_offset: 10,
-  text_color: defaultColors.fujiWhite,
-  primary_cursor_color: defaultColors.fujiWhite,
-  editor_background: defaultColors.sumiInk1,
+  scrollbarWidth: 12,
+  textOffset: 10,
+  textColor: defaultColors.fujiWhite,
+  primaryCursorColor: defaultColors.fujiWhite,
+  editorBackground: defaultColors.sumiInk1,
 }

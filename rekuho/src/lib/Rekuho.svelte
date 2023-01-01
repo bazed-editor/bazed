@@ -5,9 +5,6 @@
   import type { CaretPosition } from "./core"
   import Portion from "./Portion.svelte"
 
-  export let width: number = 50
-  export let height: number = 500
-
   let theme = exampleTheme
 
   let session: Session | null = null
@@ -28,14 +25,32 @@
     }
     session.handleMouseClicked(pos.detail)
   }
+
+  const onResize = (pos: CustomEvent<[number, number]>) => {
+    if (!session) {
+      return
+    }
+    session.handleUpdateView({
+      first_line: 0,
+      first_col: 0,
+      width: pos.detail[0],
+      height: pos.detail[1],
+    })
+  }
 </script>
 
 <div class="rekuho">
   <Portion
     {theme}
-    {width}
-    {height}
     on:keyinput={onKeyInput}
     on:mousedown={onMouseDown}
+    on:resize={onResize}
   />
 </div>
+
+<style>
+  .rekuho {
+    width: 100%;
+    height: 100%;
+  }
+</style>

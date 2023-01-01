@@ -1,64 +1,101 @@
-import { v4 } from "uuid"
+import { v4 as generateUuid } from "uuid"
+import { ensureExhaustive } from "./common"
 import { state, updateState, type CaretPosition, type State } from "./core"
 
-function ensureExhaustive(_: never) {}
-
-export async function initSession() {
-  const ws = new WebSocket("ws://localhost:6969")
+export const initSession = async () => {
+  const websocket = new WebSocket("ws://localhost:6969")
   await new Promise((resolve) => {
-    ws.onopen = (event) => resolve(event)
+    websocket.onopen = (event) => resolve(event)
   })
-  return new Session(ws)
+  return new Session(websocket)
 }
 
+/** Session class, holding the session state and the websocket connection to the backend.  */
 export class Session {
-  ws: WebSocket
+  websocket: WebSocket
   state: State = {} as any
 
-  constructor(ws: WebSocket) {
-    this.ws = ws
-    ws.onmessage = (event) => {
-      this.onMessageReceived(JSON.parse(event.data))
-    }
+  constructor(websocket: WebSocket) {
+    this.websocket = websocket
+    websocket.onmessage = (event) => this.onMessageReceived(JSON.parse(event.data))
     state.subscribe((state) => {
       this.state = state
     })
   }
 
-  send(msg: ToBackend) {
-    this.ws.send(JSON.stringify(msg))
+  /**
+   *
+   * @param {ToBackend} message - to send to backend
+   */
+  send(message: ToBackend) {
+    this.websocket.send(JSON.stringify(message))
   }
 
-  async handleKeyPressed(input: KeyInput) {
+  /**
+   * handle mouse clicks
+   * @param {KeyInput} input - key input with active modifiers
+   */
+  handleKeyPressed(input: KeyInput) {
     const view_id = this.state.view_id
     if (view_id) {
       this.send({ method: "key_pressed", params: { view_id, input } })
     }
   }
-  async handleMouseClicked(pos: CaretPosition) {
+
+  /**
+   * handle mouse clicks
+   * @param {CaretPosition} position - location - as line:column - of click
+   */
+  handleMouseClicked(position: CaretPosition) {
     const view_id = this.state.view_id
     if (view_id) {
-      this.send({ method: "mouse_input", params: { view_id, position: pos } })
+      this.send({ method: "mouse_input", params: { view_id, position } })
     }
   }
 
-  async onMessageReceived(msg: ToFrontend) {
-    console.log("Got message from ws", msg)
-    switch (msg.method) {
+  /**
+   * handle resizing and view-movements
+   * @param {{
+   *   height: number // line count
+   *   width: number  // column count
+   *   first_line: number
+   *   first_col: number
+   * }} args - object holding new line count, column count, and respective offsets
+   */
+  handleUpdateView(args: { height: number; width: number; first_line: number; first_col: number }) {
+    const view_id = this.state.view_id
+    if (view_id) {
+      this.send({ method: "viewport_changed", params: { view_id, ...args } })
+    }
+  }
+
+  /**
+   * handles all messages recieved by the frontend, sent by the backend via the established
+   * websocket
+   */
+  async onMessageReceived(message: ToFrontend) {
+    console.log("Received message from websocket", message)
+    switch (message.method) {
       case "open_document":
-        this.onOpenDocument(msg.params)
+        this.onOpenDocument(message.params)
         break
       case "view_opened_response":
-        this.onViewOpenedResponse(msg.params)
+        this.onViewOpenedResponse(message.params)
         break
       case "update_view":
-        this.onUpdateView(msg.params)
+        this.onUpdateView(message.params)
         break
       default:
-        ensureExhaustive(msg)
+        ensureExhaustive(message)
     }
   }
 
+  /** expected behavior is for a new view to be opened */
+  async onViewOpenedResponse(params: ViewOpenedResponse["params"]) {
+    updateState("view_id", params.view_id)
+  }
+
+  /** expected behavior is for the frontend to update the view */
   async onUpdateView(params: UpdateView["params"]) {
     state.update((state) => ({
       ...state,
@@ -69,22 +106,19 @@ export class Session {
     }))
   }
 
+  /** expected behavior is for the frontend to update the viewed document */
   async onOpenDocument(params: OpenDocument["params"]) {
     updateState("document_id", params.document_id)
     const msg: ViewOpened = {
       method: "view_opened",
       params: {
-        request_id: v4(),
+        request_id: generateUuid(),
         document_id: params.document_id,
-        height: 20,
+        height: 200,
         width: 40,
       },
     }
     this.send(msg)
-  }
-
-  async onViewOpenedResponse(params: ViewOpenedResponse["params"]) {
-    updateState("view_id", params.view_id)
   }
 }
 
