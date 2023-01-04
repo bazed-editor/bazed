@@ -1,11 +1,9 @@
 <script lang="ts">
-  import { example as exampleTheme } from "./theme"
-  import type { KeyInput } from "./rpc"
+  import { example as configExample } from "./config"
+  import type { KeyInput, MouseWheel } from "./rpc"
   import { initSession, Session } from "./rpc"
   import type { CaretPosition } from "./core"
   import Portion from "./Portion.svelte"
-
-  let theme = exampleTheme
 
   let session: Session | null = null
   initSession().then((x) => {
@@ -26,6 +24,13 @@
     session.handleMouseClicked(pos.detail)
   }
 
+  const onMouseWheel = (pos: CustomEvent<MouseWheel>) => {
+    if (!session) {
+      return
+    }
+    session.handleMouseWheel(pos.detail.delta)
+  }
+
   const onResize = (pos: CustomEvent<[number, number]>) => {
     if (!session) {
       return
@@ -41,9 +46,10 @@
 
 <div class="rekuho">
   <Portion
-    {theme}
+    config={configExample}
     on:keyinput={onKeyInput}
     on:mousedown={onMouseDown}
+    on:mousewheel={onMouseWheel}
     on:resize={onResize}
   />
 </div>

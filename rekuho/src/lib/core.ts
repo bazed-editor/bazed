@@ -2,7 +2,7 @@ import { writable } from "svelte/store"
 
 export type CaretPosition = { line: number; col: number }
 
-/** cached state from backend */
+/** cached view state from backend */
 export type State = {
   document_id: string | null
   view_id: string | null

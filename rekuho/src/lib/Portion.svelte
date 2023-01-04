@@ -8,25 +8,29 @@
   import type { CaretPosition } from "./core"
   import { state } from "./core"
 
-  import type { Theme } from "./theme"
+  import type { Config } from "./config"
   import { measureOnChild as fontMeasure, fontToString } from "./font"
   import type { Vector2 } from "./linearAlgebra"
-  import type { KeyInput } from "./rpc"
-  import { keyboardToKeyInput } from "./event"
+  import type { KeyInput, MouseWheel } from "./rpc"
+  import { keyboardToKeyInput, getModifiers } from "./event"
 
-  export let theme: Theme
+  type pixels = number
+  type line = number
 
-  let width: number
-  let height: number
+  export let config: Config
+
+  let width: pixels
+  let height: pixels
 
   const gutterWidth = 50 // TODO: maybe should be part of theme, minimum value?
   let input: HTMLTextAreaElement
   let container: HTMLElement
 
   const dispatch = createEventDispatcher<{
-    resize: [number, number]
+    resize: [pixels, pixels]
     keyinput: KeyInput
     mousedown: CaretPosition
+    mousewheel: MouseWheel
   }>()
 
   const emitKeyboardInput = (input: KeyInput) => dispatch("keyinput", input)
@@ -43,13 +47,11 @@
     return [column, line]
   }
 
-  type Pixels = number
-
-  let lineHeight: Pixels
-  let columnWidth: Pixels
+  let lineHeight: pixels
+  let columnWidth: pixels
 
   $: if (container) {
-    const fontMetrics = fontMeasure(container, fontToString(theme.font))
+    const fontMetrics = fontMeasure(container, fontToString(config.font))
     lineHeight = fontMetrics.actualHeight ?? 0
     columnWidth = fontMetrics.width ?? 0
   }
@@ -59,20 +61,58 @@
 
   const transformToScreenPosition = ([x, y]: Vector2): Vector2 => [x * columnWidth, y * lineHeight]
 
+  ////////////////////////////////////////////////////////////////////////////////
+
   const longestLine = (text: string[]): string =>
     text.reduce((a, b) => (a.length < b.length ? b : a), "")
 
   $: linesViewWidth = $state.lines ? longestLine($state.lines).length : 1
   $: textViewWidth = width - gutterWidth
-  $: textToVisibleRatio = (linesViewWidth * columnWidth - theme.textOffset) / width
-  $: verticalScrollerWidth = textViewWidth / textToVisibleRatio
+  $: textWidthToVisibleRatio = (linesViewWidth * columnWidth - config.textOffset) / width
+  $: horizontalScrollerWidth = textViewWidth / textWidthToVisibleRatio
 
   ////////////////////////////////////////////////////////////////////////////////
 
-  const onMouseDown = (ev: MouseEvent) => {
-    const [x, y] = pxToPortionPosition([ev.pageX, ev.pageY])
-    onMouseClicked({ line: y, col: x })
+  let scrollOffset: pixels = 0
+
+  // const scrollShowLine = (lineNumber: line, height: pixels): void => {
+  //   const lineOffset = lineNumber * lineHeight
+  //   if (lineOffset + lineHeight > scrollOffset + height) {
+  //     scrollOffset = lineOffset - height + lineHeight
+  //   } else if (scrollOffset > lineOffset) {
+  //     scrollOffset = lineOffset
+  //   }
+  // }
+
+  // $: scrollShowLine($state.carets[0]?.line ?? 0, height)
+
+  $: scrollOffset = $state.first_line * lineHeight
+
+  ////////////////////////////////////////////////////////////////////////////////
+
+  const onMouseDown = (event: MouseEvent): boolean => {
+    const [x, y] = pxToPortionPosition([event.pageX, event.pageY + scrollOffset])
+    const handled = onMouseClicked({ line: y, col: x })
     input.focus()
+    return handled
+  }
+
+  const onWheel = (event: WheelEvent): boolean => {
+    const modifiers = getModifiers(event)
+    const delta = event.deltaY
+    switch (event.deltaMode) {
+      case WheelEvent.DOM_DELTA_PIXEL:
+        console.log(`{ delta: ${delta} }`)
+        break
+      case WheelEvent.DOM_DELTA_LINE:
+        console.error("unhandled page wheel line mode")
+        break
+      case WheelEvent.DOM_DELTA_PAGE:
+        console.error("unhandled page wheel delta mode")
+        break
+    }
+    dispatch("mousewheel", { modifiers, delta: Math.round(delta / lineHeight) > 0 ? 1 : -1 })
+    return true
   }
 
   const onKeyDown = (domEvent: KeyboardEvent) => {
@@ -94,17 +134,19 @@
   <!-- TODO: refactor into `Gutter.svelte` -->
   <div
     class="gutter"
-    style:background={theme.gutter.background}
+    style:background={config.theme.gutterBg}
+    style:top="-{scrollOffset}px"
     style:width="{gutterWidth}px"
     style:height="{height}px"
   >
-    {#each $state.lines as _, i}
+    {#each $state.lines as _, _i}
+      {@const i = $state.first_line + _i}
       <div
         class="gutter-cell"
         on:mousedown|preventDefault={(_) => onMouseClicked({ col: 0, line: i })}
-        style:font-size={theme.font.size}
+        style:font-size={config.font.size}
         style:height="{lineHeight}px"
-        style:top="{i * lineHeight}px"
+        style:top="{_i * lineHeight}px"
       >
         {i + 1}
       </div>
@@ -117,8 +159,8 @@
     style:position="absolute"
     style:height="{height}px"
     style:top="0"
-    style:background={theme.editorBackground}
-    style:width="{theme.textOffset}px"
+    style:background={config.theme.editorBg}
+    style:width="{config.textOffset}px"
     style:left="{gutterWidth}px"
   />
 
@@ -126,10 +168,10 @@
     bind:this={container}
     class="container"
     on:mousedown|preventDefault={onMouseDown}
-    on:mousemove={() => {}}
-    on:mouseup={() => {}}
-    style:background={theme.editorBackground}
-    style:left="{gutterWidth + theme.textOffset}px"
+    on:wheel={onWheel}
+    style:top="-{scrollOffset}px"
+    style:left="{gutterWidth + config.textOffset}px"
+    style:background={config.theme.editorBg}
   >
     <textarea
       bind:this={input}
@@ -144,14 +186,14 @@
       {#each $state.lines as line, i}
         <div
           class="line-container"
-          style:top="{i * lineHeight}px"
+          style:top="{($state.first_line + i) * lineHeight}px"
           style:height="{lineHeight}px"
         >
           <span
             class="line-view"
-            style:font-family={theme.font.family}
-            style:font-size={theme.font.size}
-            style:color={theme.textColor}
+            style:font-family={config.font.family}
+            style:font-size={config.font.size}
+            style:color={config.theme.editorFg}
             style:height="{lineHeight}px"
             style:line-height="{lineHeight}px"
           >
@@ -170,7 +212,7 @@
           style:visibility="inherit"
           style:width="{columnWidth}px"
           style:height="{lineHeight}px"
-          style:background={theme.primaryCursorColor}
+          style:background={config.theme.cursorColorPrimary}
           style:left="{x}px"
           style:top="{y}px"
         />
@@ -179,24 +221,25 @@
   </div>
 
   <!-- TODO: Implement vertical scrollbar and scrolling -->
-  <!-- <VerticalScrollbar /> -->
-  {#if textToVisibleRatio > 1}
+  <!--
+  {#if textWidthToVisibleRatio > 1}
     <div
-      class="scrollbar vertical"
-      style:height="{theme.scrollbarWidth}px"
+      class="scrollbar horizontal"
+      style:height="{config.scrollbarWidth}px"
       style:width="{width - gutterWidth}px"
       style:left="{gutterWidth}px"
-      style:top="{height - theme.scrollbarWidth}px"
+      style:top="{height - config.scrollbarWidth}px"
     >
       <div
         class="scroller"
         on:mousedown|preventDefault={(_) => {}}
-        style:height="{theme.scrollbarWidth}px"
-        style:width="{verticalScrollerWidth}px"
+        style:height="{config.scrollbarWidth}px"
+        style:width="{horizontalScrollerWidth}px"
         style:background="#FFFFFF"
       />
     </div>
   {/if}
+  -->
 </div>
 
 <style>
@@ -224,7 +267,6 @@
 
   .container {
     position: absolute;
-    top: 0;
     width: 1000000px;
     height: 1000000px;
   }
