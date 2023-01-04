@@ -9,7 +9,7 @@
 //! Terminology of `Region`s and `Carets` etc. is specified in [BufferRegions].
 
 use nonempty::NonEmpty;
-use xi_rope::{engine::Engine, DeltaBuilder, Rope, RopeDelta, RopeInfo};
+use xi_rope::{engine::Engine, DeltaBuilder, LinesMetric, Rope, RopeDelta, RopeInfo};
 
 use self::{
     buffer_regions::BufferRegions, movement::apply_motion_to_region, position::Position,
@@ -59,6 +59,10 @@ impl Buffer {
 
     pub fn len(&self) -> usize {
         self.text.len()
+    }
+
+    pub fn line_count(&self) -> usize {
+        self.text.measure::<LinesMetric>()
     }
 
     /// Return a snapshot of the latest commited state of the text

@@ -10,6 +10,7 @@ use crate::keycode::KeyInput;
 #[serde(transparent)]
 pub struct RequestId(pub Uuid);
 
+/// Absolute position within a document
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct CaretPosition {
@@ -53,10 +54,17 @@ pub enum ToBackend {
         view_id: Uuid,
         input: KeyInput,
     },
-    /// Mouse was clicked. The coordinates are absolute.
+    /// Mouse was clicked notification.
     MouseInput {
         view_id: Uuid,
+        /// Absolute coordinates, see [CaretPosition]
         position: CaretPosition,
+    },
+    /// Mouse wheel turned notification.
+    MouseScroll {
+        view_id: Uuid,
+        /// Positive or negative values mean scrolling down or up respectively
+        line_delta: i32,
     },
     /// Send when the viewport for a given view has changed,
     /// i.e. because the window was resized or the user scrolled.
