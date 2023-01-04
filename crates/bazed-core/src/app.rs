@@ -80,6 +80,14 @@ impl App {
                 self.handle_mouse_input(ViewId::from_uuid(view_id), position)
                     .await?
             },
+            ToBackend::MouseScroll {
+                view_id,
+                line_delta,
+            } => {
+                self.handle_mouse_scroll(ViewId::from_uuid(view_id), line_delta)
+                    .await?
+            },
+
             ToBackend::ViewportChanged {
                 view_id,
                 height,
@@ -182,6 +190,33 @@ impl App {
         self.event_send
             .send_rpc(document.create_update_notification(view_id, view, self.vim_interface.mode))
             .await?;
+        Ok(())
+    }
+
+    async fn handle_mouse_scroll(&mut self, view_id: ViewId, line_delta: i32) -> Result<()> {
+        let mut view = self
+            .views
+            .get_mut(&view_id)
+            .ok_or(Error::InvalidViewId(view_id))?;
+
+        let document = self
+            .documents
+            .get(&view.document_id)
+            .ok_or(Error::InvalidDocumentId(view.document_id))?;
+
+        let line_count = document.buffer.line_count();
+
+        view.vp.first_line = usize::min(
+            view.vp
+                .first_line
+                .saturating_add_signed(line_delta as isize),
+            line_count,
+        );
+
+        self.event_send
+            .send_rpc(document.create_update_notification(view_id, view, self.vim_interface.mode))
+            .await?;
+
         Ok(())
     }
 

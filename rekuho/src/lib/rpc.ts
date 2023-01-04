@@ -54,6 +54,17 @@ export class Session {
   }
 
   /**
+   * handle mouse wheel
+   * @param {number} line_delta - count of lines to scroll, positive to scroll down
+   */
+  handleMouseWheel(line_delta: number) {
+    const view_id = this.state.view_id
+    if (view_id) {
+      this.send({ method: "mouse_scroll", params: { view_id, line_delta } })
+    }
+  }
+
+  /**
    * handle resizing and view-movements
    * @param {{
    *   height: number // line count
@@ -137,7 +148,7 @@ type Message<Method extends string, Params> = {
 
 type ToFrontend = OpenDocument | UpdateView | ViewOpenedResponse
 
-type ToBackend = ViewOpened | ViewportChanged | KeyPressed | SaveDocument | MouseInput
+type ToBackend = ViewOpened | ViewportChanged | KeyPressed | SaveDocument | MouseInput | MouseScroll
 
 type OpenDocument = Message<
   "open_document",
@@ -212,8 +223,18 @@ type MouseInput = Message<
   }
 >
 
+type MouseScroll = Message<
+  "mouse_scroll",
+  {
+    view_id: Uuid
+    line_delta: number
+  }
+>
+
+export type MouseWheel = { modifiers: Modifier[]; delta: number }
+
 export type KeyInput = {
-  modifiers: Array<Modifier>
+  modifiers: Modifier[]
   key: Key
 }
 

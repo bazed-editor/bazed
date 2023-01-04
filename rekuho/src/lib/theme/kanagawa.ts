@@ -1,7 +1,7 @@
 // Copyright (c) 2021 Tommaso Laurenzi
 // see https://github.com/rebelot/kanagawa.nvim for their beautiful theme!
 
-export default {
+const kanagawa = {
   // Bg Shades
   sumiInk0: "#16161D",
   sumiInk1b: "#181820",
@@ -58,4 +58,13 @@ export default {
   peachRed: "#FF5D62",
   surimiOrange: "#FFA066",
   katanaGray: "#717C7C",
+}
+
+import type { Theme } from "../theme"
+
+export const theme: Theme = {
+  editorFg: kanagawa.fujiWhite,
+  editorBg: kanagawa.sumiInk1,
+  gutterBg: kanagawa.sumiInk0,
+  cursorColorPrimary: kanagawa.fujiWhite,
 }
