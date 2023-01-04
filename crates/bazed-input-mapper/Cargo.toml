@@ -1,0 +1,19 @@
+[package]
+name = "bazed-input-mapper"
+version = "0.0.0"
+edition = "2021"
+authors.workspace = true
+categories.workspace = true
+keywords.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+nonempty.workspace = true
+derive_more.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+unicode-general-category.workspace = true
+unicode-canonical-combining-class = "0.5.0"
+itertools = "0.10.5"

@@ -11,9 +11,9 @@ license.workspace = true
 
 [dependencies]
 xi-rope = { package = "lapce-xi-rope", version = "0.3.1" }
-unicode-general-category = "0.6.0"
-nonempty = "0.8.1"
+unicode-general-category.workspace = true
 hotsauce = "0.1.0"
+nonempty.workspace = true
 color-eyre.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
