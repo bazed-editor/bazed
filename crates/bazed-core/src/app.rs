@@ -17,6 +17,8 @@ use crate::{
     vim_interface::VimInterface,
 };
 
+const SCROLL_OFF: usize = 3;
+
 #[derive(Debug, thiserror::Error)]
 enum Error {
     #[error("No document with id {0} found")]
@@ -156,6 +158,7 @@ impl App {
         }
         Ok(())
     }
+
     async fn handle_key_pressed(&mut self, view_id: ViewId, input: KeyInput) -> Result<()> {
         let view = self
             .views
@@ -168,6 +171,10 @@ impl App {
 
         self.vim_interface
             .on_input(view, &mut document.buffer, input);
+
+        // Make sure to keep the cursor on screen
+        let caret_line = document.buffer.primary_caret_position().line;
+        view.vp = view.vp.with_line_in_view(caret_line, SCROLL_OFF);
 
         self.event_send
             .send_rpc(document.create_update_notification(view_id, view, self.vim_interface.mode))

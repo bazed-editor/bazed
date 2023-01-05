@@ -93,6 +93,10 @@ impl BufferRegions {
         self.make_carets_consistent()
     }
 
+    pub(super) fn primary_caret(&self) -> &Region {
+        self.regions.get(&self.primary_caret_id).unwrap()
+    }
+
     /// Add a new caret and return the generated id.
     ///
     /// Note that the caret may imediately get merged into another region.
