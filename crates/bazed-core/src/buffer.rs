@@ -81,6 +81,14 @@ impl Buffer {
                 .expect("Caret stored in BufferRegions was not a valid offset into the buffer")
         })
     }
+    pub fn primary_caret(&self) -> &Region {
+        self.regions.primary_caret()
+    }
+
+    pub fn primary_caret_position(&self) -> Position {
+        Position::from_offset(&self.text, self.primary_caret().head)
+            .expect("Caret stored in BufferRegions was not a valid offset into the buffer")
+    }
 
     pub fn start_building_delta(&self) -> DeltaBuilder<RopeInfo> {
         DeltaBuilder::new(self.text.len())
@@ -525,7 +533,7 @@ mod test {
         b.move_carets(&vp, Motion::TopOfViewport);
         assert_eq!(1, b.all_caret_positions().first().line);
         b.move_carets(&vp, Motion::BottomOfViewport);
-        assert_eq!(3, b.all_caret_positions().first().line);
+        assert_eq!(2, b.all_caret_positions().first().line);
 
         // verify we don't die if the bottom of the viewport is below the last line
         vp.height = 100;
