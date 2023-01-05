@@ -86,7 +86,7 @@
 
   // $: scrollShowLine($state.carets[0]?.line ?? 0, height)
 
-  $: scrollOffset = $state.first_line * lineHeight
+  $: scrollOffset = $state.firstLine * lineHeight
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -140,7 +140,7 @@
     style:height="{height}px"
   >
     {#each $state.lines as _, _i}
-      {@const i = $state.first_line + _i}
+      {@const i = $state.firstLine + _i}
       <div
         class="gutter-cell"
         on:mousedown|preventDefault={(_) => onMouseClicked({ col: 0, line: i })}
@@ -186,7 +186,7 @@
       {#each $state.lines as line, i}
         <div
           class="line-container"
-          style:top="{($state.first_line + i) * lineHeight}px"
+          style:top="{($state.firstLine + i) * lineHeight}px"
           style:height="{lineHeight}px"
         >
           <span
