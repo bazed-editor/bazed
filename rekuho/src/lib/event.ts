@@ -44,17 +44,17 @@ export const keyboardToKeyInput = (event: KeyboardEvent): KeyInput | null => {
   return key ? { modifiers, key } : null
 }
 
-const wheelDelta = (event: WheelEvent): number => {
+export const wheelDelta = (event: WheelEvent): number => {
   switch (event.deltaMode) {
     case WheelEvent.DOM_DELTA_PIXEL:
       console.log(`wheel_event { delta: ${event.deltaY} }`)
       break
     case WheelEvent.DOM_DELTA_LINE:
-      console.error("unhandled page wheel line mode")
+      console.error('improperly handled wheel delta mode: "LINE"')
       break
     case WheelEvent.DOM_DELTA_PAGE:
-      console.error("unhandled page wheel delta mode")
+      console.error('improperly handled wheel delta mode: "PAGE"')
       break
   }
-  return event.deltaY
+  return Math.sign(event.deltaY)
 }
