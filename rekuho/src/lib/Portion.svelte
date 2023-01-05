@@ -12,7 +12,7 @@
   import { measureOnChild as fontMeasure, fontToString } from "./font"
   import type { Vector2 } from "./linearAlgebra"
   import type { KeyInput, MouseWheel } from "./rpc"
-  import { keyboardToKeyInput, getModifiers } from "./event"
+  import { getModifiers, keyboardToKeyInput, wheelDelta } from "./event"
 
   type pixels = number
   type line = number
@@ -71,21 +71,7 @@
   $: textWidthToVisibleRatio = (linesViewWidth * columnWidth - config.textOffset) / width
   $: horizontalScrollerWidth = textViewWidth / textWidthToVisibleRatio
 
-  ////////////////////////////////////////////////////////////////////////////////
-
-  let scrollOffset: pixels = 0
-
-  // const scrollShowLine = (lineNumber: line, height: pixels): void => {
-  //   const lineOffset = lineNumber * lineHeight
-  //   if (lineOffset + lineHeight > scrollOffset + height) {
-  //     scrollOffset = lineOffset - height + lineHeight
-  //   } else if (scrollOffset > lineOffset) {
-  //     scrollOffset = lineOffset
-  //   }
-  // }
-
-  // $: scrollShowLine($state.carets[0]?.line ?? 0, height)
-
+  let scrollOffset: number = 0
   $: scrollOffset = $state.firstLine * lineHeight
 
   ////////////////////////////////////////////////////////////////////////////////
@@ -99,19 +85,8 @@
 
   const onWheel = (event: WheelEvent): boolean => {
     const modifiers = getModifiers(event)
-    const delta = event.deltaY
-    switch (event.deltaMode) {
-      case WheelEvent.DOM_DELTA_PIXEL:
-        console.log(`{ delta: ${delta} }`)
-        break
-      case WheelEvent.DOM_DELTA_LINE:
-        console.error("unhandled page wheel line mode")
-        break
-      case WheelEvent.DOM_DELTA_PAGE:
-        console.error("unhandled page wheel delta mode")
-        break
-    }
-    dispatch("mousewheel", { modifiers, delta: Math.round(delta / lineHeight) > 0 ? 1 : -1 })
+    const delta = wheelDelta(event)
+    dispatch("mousewheel", { modifiers, delta })
     return true
   }
 
@@ -250,6 +225,7 @@
     height: 100%;
   }
 
+  /*
   .scrollbar {
     position: absolute;
   }
@@ -257,6 +233,7 @@
   .scroller {
     position: absolute;
   }
+  */
 
   .gutter-cell {
     width: 50px;
