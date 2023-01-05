@@ -36,7 +36,7 @@ export class Session {
    * @param {KeyInput} input - key input with active modifiers
    */
   handleKeyPressed(input: KeyInput) {
-    const view_id = this.state.view_id
+    const view_id = this.state.viewId
     if (view_id) {
       this.send({ method: "key_pressed", params: { view_id, input } })
     }
@@ -47,7 +47,7 @@ export class Session {
    * @param {CaretPosition} position - location - as line:column - of click
    */
   handleMouseClicked(position: CaretPosition) {
-    const view_id = this.state.view_id
+    const view_id = this.state.viewId
     if (view_id) {
       this.send({ method: "mouse_input", params: { view_id, position } })
     }
@@ -58,7 +58,7 @@ export class Session {
    * @param {number} line_delta - count of lines to scroll, positive to scroll down
    */
   handleMouseWheel(line_delta: number) {
-    const view_id = this.state.view_id
+    const view_id = this.state.viewId
     if (view_id) {
       this.send({ method: "mouse_scroll", params: { view_id, line_delta } })
     }
@@ -74,7 +74,7 @@ export class Session {
    * }} args - object holding new line count, column count, and respective offsets
    */
   handleUpdateView(args: { height: number; width: number; first_line: number; first_col: number }) {
-    const view_id = this.state.view_id
+    const view_id = this.state.viewId
     if (view_id) {
       this.send({ method: "viewport_changed", params: { view_id, ...args } })
     }
@@ -103,7 +103,7 @@ export class Session {
 
   /** expected behavior is for a new view to be opened */
   async onViewOpenedResponse(params: ViewOpenedResponse["params"]) {
-    updateState("view_id", params.view_id)
+    updateState("viewId", params.view_id)
   }
 
   /** expected behavior is for the frontend to update the view */
@@ -111,7 +111,7 @@ export class Session {
     state.update((state) => ({
       ...state,
       lines: params.text,
-      first_line: params.first_line,
+      firstLine: params.first_line,
       carets: params.carets,
       height: params.height,
     }))
@@ -119,7 +119,7 @@ export class Session {
 
   /** expected behavior is for the frontend to update the viewed document */
   async onOpenDocument(params: OpenDocument["params"]) {
-    updateState("document_id", params.document_id)
+    updateState("documentId", params.document_id)
     const msg: ViewOpened = {
       method: "view_opened",
       params: {

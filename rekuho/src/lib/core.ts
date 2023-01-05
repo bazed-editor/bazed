@@ -4,25 +4,25 @@ export type CaretPosition = { line: number; col: number }
 
 /** cached view state from backend */
 export type State = {
-  document_id: string | null
-  view_id: string | null
+  documentId: string | null
+  viewId: string | null
   lines: string[]
-  first_line: number
+  firstLine: number
   height: number
   carets: CaretPosition[]
 }
 
 /** store, holding cached state from backend */
 export const state = writable<State>({
-  document_id: null,
-  view_id: null,
+  documentId: null,
+  viewId: null,
   lines: [""],
-  first_line: 0,
+  firstLine: 0,
   height: 10,
   carets: [],
 })
 
 /** update stored cached state */
 export const updateState = <K extends keyof State>(field: K, value: State[K]) => {
-  state.update((s) => ({ ...s, [field]: value }))
+  state.update((current) => ({ ...current, [field]: value }))
 }
