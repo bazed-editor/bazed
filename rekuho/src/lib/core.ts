@@ -4,7 +4,7 @@ export type CaretPosition = { line: number; col: number }
 
 /** cached view state from backend */
 export type State = {
-  documents: { [id: string]: { path: string | null } },
+  documents: { [id: string]: { path: string | null } }
   views: { [id: string]: ViewState }
 }
 
