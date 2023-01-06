@@ -241,22 +241,17 @@ pub async fn start(addr: &str, path: Option<std::path::PathBuf>) -> Result<()> {
 
     let core = Arc::new(RwLock::new(App::new(send)));
 
-    tokio::spawn({
-        let core = core.clone();
-        async move {
-            while let Some(rpc_call) = recv.next().await {
-                let mut core = core.write().await;
-                if let Err(err) = core.handle_rpc_call(rpc_call).await {
-                    tracing::error!("Failed to handle rpc call: {err:?}");
-                }
-            }
-        }
-    });
-
     if let Some(path) = path {
         core.write().await.open_file(path).await?;
     } else {
         core.write().await.open_ephemeral().await?;
+    }
+
+    while let Some(rpc_call) = recv.next().await {
+        let mut core = core.write().await;
+        if let Err(err) = core.handle_rpc_call(rpc_call).await {
+            tracing::error!("Failed to handle rpc call: {err:?}");
+        }
     }
 
     Ok(())

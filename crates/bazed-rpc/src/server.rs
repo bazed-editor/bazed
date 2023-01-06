@@ -20,12 +20,14 @@ impl ClientSendHandle {
 pub async fn wait_for_client(
     addr: &str,
 ) -> Result<(ClientSendHandle, UnboundedReceiver<ToBackend>)> {
+    tracing::debug!("Starting tcp listener at {addr}");
     let server_listener = tokio::net::TcpListener::bind(addr)
         .await
         .context("Failed to start tcp server")?;
 
     // for now, we only accept a single client. This will need to be a loop later.
     let (stream, _) = server_listener.accept().await?;
+    tracing::debug!("Client accepted");
     let ws_stream = tokio_tungstenite::accept_async(stream).await?;
     let (mut ws_send, mut ws_recv) = ws_stream.split();
 
