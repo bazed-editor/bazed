@@ -3,11 +3,9 @@
   This window contains the visible and editable text.
 -->
 <script lang="ts">
-  import { createEventDispatcher } from "svelte"
+  import { onMount, createEventDispatcher } from "svelte"
 
   import type { CaretPosition } from "./core"
-  import { state } from "./core"
-
   import type { Config } from "./config"
   import { measureOnChild as fontMeasure, fontToString } from "./font"
   import type { Vector2 } from "./linearAlgebra"
@@ -18,6 +16,9 @@
   type line = number
 
   export let config: Config
+  export let lines: string[]
+  export let firstLine: number
+  export let carets: CaretPosition[]
 
   let width: pixels
   let height: pixels
@@ -66,13 +67,13 @@
   const longestLine = (text: string[]): string =>
     text.reduce((a, b) => (a.length < b.length ? b : a), "")
 
-  $: linesViewWidth = $state.lines ? longestLine($state.lines).length : 1
+  $: linesViewWidth = lines ? longestLine(lines).length : 1
   $: textViewWidth = width - gutterWidth
   $: textWidthToVisibleRatio = (linesViewWidth * columnWidth - config.textOffset) / width
   $: horizontalScrollerWidth = textViewWidth / textWidthToVisibleRatio
 
   let scrollOffset: number = 0
-  $: scrollOffset = $state.firstLine * lineHeight
+  $: scrollOffset = firstLine * lineHeight
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -91,7 +92,6 @@
   }
 
   const onKeyDown = (domEvent: KeyboardEvent) => {
-    console.log(domEvent)
     const event = keyboardToKeyInput(domEvent)
     if (event) {
       emitKeyboardInput(event)
@@ -114,8 +114,8 @@
     style:width="{gutterWidth}px"
     style:height="{height}px"
   >
-    {#each $state.lines as _, _i}
-      {@const i = $state.firstLine + _i}
+    {#each lines as _, _i}
+      {@const i = firstLine + _i}
       <div
         class="gutter-cell"
         on:mousedown|preventDefault={(_) => onMouseClicked({ col: 0, line: i })}
@@ -158,10 +158,10 @@
       style:width="{columnWidth}px"
     />
     <div class="lines-container">
-      {#each $state.lines as line, i}
+      {#each lines as line, i}
         <div
           class="line-container"
-          style:top="{($state.firstLine + i) * lineHeight}px"
+          style:top="{(firstLine + i) * lineHeight}px"
           style:height="{lineHeight}px"
         >
           <span
@@ -179,7 +179,7 @@
     </div>
 
     <div class="cursors-layer">
-      {#each $state.carets as { line, col }, i}
+      {#each carets as { line, col }, i}
         {@const [x, y] = transformToScreenPosition([col, line])}
         <div
           class="cursor"
