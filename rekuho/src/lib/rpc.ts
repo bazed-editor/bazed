@@ -1,6 +1,6 @@
 import { v4 as generateUuid } from "uuid"
 import { ensureExhaustive } from "./common"
-import { state, updateState, type CaretPosition, type State } from "./core"
+import { state, updateState, type CaretPosition, type State, type ViewState } from "./core"
 
 export const initSession = async () => {
   const websocket = new WebSocket("ws://localhost:6969")
@@ -14,9 +14,11 @@ export const initSession = async () => {
 export class Session {
   websocket: WebSocket
   state: State = {} as any
+  requests: { [id: string]: (response: ToFrontend) => void }
 
   constructor(websocket: WebSocket) {
     this.websocket = websocket
+    this.requests = {}
     websocket.onmessage = (event) => this.onMessageReceived(JSON.parse(event.data))
     state.subscribe((state) => {
       this.state = state
@@ -28,6 +30,7 @@ export class Session {
    * @param {ToBackend} message - to send to backend
    */
   send(message: ToBackend) {
+    console.log("Sending rpc call to backend:", message)
     this.websocket.send(JSON.stringify(message))
   }
 
@@ -35,33 +38,24 @@ export class Session {
    * handle mouse clicks
    * @param {KeyInput} input - key input with active modifiers
    */
-  handleKeyPressed(input: KeyInput) {
-    const view_id = this.state.viewId
-    if (view_id) {
-      this.send({ method: "key_pressed", params: { view_id, input } })
-    }
+  handleKeyPressed(view_id: string, input: KeyInput) {
+    this.send({ method: "key_pressed", params: { view_id, input } })
   }
 
   /**
    * handle mouse clicks
    * @param {CaretPosition} position - location - as line:column - of click
    */
-  handleMouseClicked(position: CaretPosition) {
-    const view_id = this.state.viewId
-    if (view_id) {
-      this.send({ method: "mouse_input", params: { view_id, position } })
-    }
+  handleMouseClicked(view_id: string, position: CaretPosition) {
+    this.send({ method: "mouse_input", params: { view_id, position } })
   }
 
   /**
    * handle mouse wheel
    * @param {number} line_delta - count of lines to scroll, positive to scroll down
    */
-  handleMouseWheel(line_delta: number) {
-    const view_id = this.state.viewId
-    if (view_id) {
-      this.send({ method: "mouse_scroll", params: { view_id, line_delta } })
-    }
+  handleMouseWheel(view_id: string, line_delta: number) {
+    this.send({ method: "mouse_scroll", params: { view_id, line_delta } })
   }
 
   /**
@@ -69,15 +63,10 @@ export class Session {
    * @param {{
    *   height: number // line count
    *   width: number  // column count
-   *   first_line: number
-   *   first_col: number
    * }} args - object holding new line count, column count, and respective offsets
    */
-  handleUpdateView(args: { height: number; width: number; first_line: number; first_col: number }) {
-    const view_id = this.state.viewId
-    if (view_id) {
-      this.send({ method: "viewport_changed", params: { view_id, ...args } })
-    }
+  handleUpdateView(view_id: string, args: { height: number; width: number }) {
+    this.send({ method: "viewport_changed", params: { view_id, ...args } })
   }
 
   /**
@@ -85,51 +74,87 @@ export class Session {
    * websocket
    */
   async onMessageReceived(message: ToFrontend) {
-    console.log("Received message from websocket", message)
+    console.log("Handling message from websocket:", message)
     switch (message.method) {
       case "open_document":
         this.onOpenDocument(message.params)
         break
-      case "view_opened_response":
-        this.onViewOpenedResponse(message.params)
-        break
       case "update_view":
         this.onUpdateView(message.params)
+        break
+      case "view_opened_response":
+        this.requests[message.params.request_id](message)
+        delete this.requests[message.params.request_id]
         break
       default:
         ensureExhaustive(message)
     }
   }
 
-  /** expected behavior is for a new view to be opened */
-  async onViewOpenedResponse(params: ViewOpenedResponse["params"]) {
-    updateState("viewId", params.view_id)
-  }
+  async requestDocumentView(document_id: string): Promise<ViewOpenedResponse> {
+    const request_id = generateUuid()
 
-  /** expected behavior is for the frontend to update the view */
-  async onUpdateView(params: UpdateView["params"]) {
-    state.update((state) => ({
-      ...state,
-      lines: params.text,
-      firstLine: params.first_line,
-      carets: params.carets,
-      height: params.height,
-    }))
-  }
-
-  /** expected behavior is for the frontend to update the viewed document */
-  async onOpenDocument(params: OpenDocument["params"]) {
-    updateState("documentId", params.document_id)
-    const msg: ViewOpened = {
+    const message: ViewOpened = {
       method: "view_opened",
       params: {
-        request_id: generateUuid(),
-        document_id: params.document_id,
+        document_id,
+        request_id, 
         height: 200,
         width: 40,
       },
     }
-    this.send(msg)
+
+    this.send(message)
+    return new Promise((resolve) => this.requests[request_id] = resolve as any)
+  }
+
+  /** expected behavior is for the frontend to update the viewed document */
+  async onOpenDocument(params: OpenDocument["params"]) {
+    const document: { path: string | null } = { path: params.path }
+
+    state.update((state) => ({
+      views: state.views,
+      documents: {
+        ...state.documents,
+        [params.document_id]: document
+      }
+    }))
+
+    let viewOpenResponse = await this.requestDocumentView(params.document_id)
+    this.onViewOpenedResponse(params.document_id, viewOpenResponse.params)
+  }
+
+  /** expected behavior is for a new view to be opened */
+  async onViewOpenedResponse(document_id: string, params: ViewOpenedResponse["params"]) {
+    const normal: ViewState = {
+      document: document_id,
+      lines: [],
+      firstLine: 0,
+      height: 20,
+      carets: [],
+    }
+
+    state.update((state) => ({
+      documents: state.documents,
+      views: {
+        ...state.views,
+        [params.view_id]: normal,
+      }
+    }))
+    // updateState("viewId", params.view_id)
+  }
+
+  /** expected behavior is for the frontend to update the view */
+  async onUpdateView(params: UpdateView["params"]) {
+    state.update((state) => {
+      state.views[params.view_id] = {
+        ...state.views[params.view_id],
+        firstLine: params.first_line,
+        lines: params.text,
+        carets: params.carets,
+      }
+      return state
+    })
   }
 }
 
@@ -164,7 +189,6 @@ type UpdateView = Message<
   {
     view_id: Uuid
     first_line: number
-    height: number
     text: string[]
     carets: Position[]
   }
@@ -194,8 +218,6 @@ type ViewportChanged = Message<
     view_id: Uuid
     height: number
     width: number
-    first_line: number
-    first_col: number
   }
 >
 
