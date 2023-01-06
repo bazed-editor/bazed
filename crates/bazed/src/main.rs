@@ -17,14 +17,29 @@ async fn main() -> Result<()> {
         .with(ErrorLayer::default())
         .init();
 
-    tokio::spawn(async {
-        let edited_file = std::env::args().nth(1);
+    let mut run_frontend = true;
+    let mut edited_file = None;
+    for arg in std::env::args().skip(1) {
+        if arg == "--no-frontend" {
+            run_frontend = false;
+        } else {
+            edited_file = Some(arg);
+        }
+    }
 
+    tokio::spawn(async {
         bazed_core::app::start("127.0.0.1:6969", edited_file.map(Into::into))
             .await
             .unwrap();
     });
 
-    bazed_tauri::run_frontend();
+    if run_frontend {
+        bazed_tauri::run_frontend();
+    } else {
+        // Wait indefinitely to keep backend task running
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        }
+    }
     Ok(())
 }

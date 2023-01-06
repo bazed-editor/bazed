@@ -69,6 +69,10 @@ pub async fn wait_for_client(
                     }
                 }
                 to_frontend_msg = to_frontend_recv.next() => {
+                    let Some(to_frontend_msg) = to_frontend_msg else {
+                        tracing::warn!("Stopping server loop because to_frontend_send has closed");
+                        break;
+                    };
                     tracing::debug!("Sending rpc call to client: {to_frontend_msg:?}");
                     let json = serde_json::to_string(&to_frontend_msg).unwrap();
                     if let Err(err) = ws_send.send(tungstenite::Message::Text(json)).await {
