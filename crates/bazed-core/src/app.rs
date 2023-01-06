@@ -90,12 +90,8 @@ impl App {
                     .await?
             },
 
-            ToBackend::ViewportChanged {
-                view_id,
-                height,
-                first_line,
-            } => {
-                self.handle_viewport_changed(ViewId::from_uuid(view_id), height, first_line)
+            ToBackend::ViewportChanged { view_id, height } => {
+                self.handle_viewport_changed(ViewId::from_uuid(view_id), height)
                     .await?;
             },
             ToBackend::ViewOpened {
@@ -129,19 +125,13 @@ impl App {
         Ok(document.write_to_file().await?)
     }
 
-    async fn handle_viewport_changed(
-        &mut self,
-        view_id: ViewId,
-        height: usize,
-        first_line: usize,
-    ) -> Result<()> {
+    async fn handle_viewport_changed(&mut self, view_id: ViewId, height: usize) -> Result<()> {
         let view = self
             .views
             .get_mut(&view_id)
             .ok_or(Error::InvalidViewId(view_id))?;
-        let needs_new_view_info = height > view.vp.height || view.vp.first_line != first_line;
+        let needs_new_view_info = height > view.vp.height;
         view.vp.height = height;
-        view.vp.first_line = first_line;
 
         if needs_new_view_info {
             let document = self
@@ -283,6 +273,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::App;
+    use crate::test_util;
 
     macro_rules! expect_msg {
         ($s:literal, $recv:ident, $p:pat => $e:expr) => {
@@ -326,36 +317,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_viewport_changed() -> color_eyre::Result<()> {
+        test_util::setup_test();
         let (mut app, mut to_frontend_recv, view_id) = setup_view().await?;
         // Expanding the Viewport should trigger an UpdateView response
         app.handle_rpc_call(ToBackend::ViewportChanged {
             view_id,
             height: 15,
-            first_line: 0,
         })
         .await?;
         expect_msg!("UpdateView", to_frontend_recv, ToFrontend::UpdateView { .. } => {});
 
         // Shrinking the Viewport should not trigger an UpdateView response
-        app.handle_rpc_call(ToBackend::ViewportChanged {
-            view_id,
-            height: 5,
-            first_line: 0,
-        })
-        .await?;
+        app.handle_rpc_call(ToBackend::ViewportChanged { view_id, height: 5 })
+            .await?;
         // Panic if there is a message
         to_frontend_recv.try_next().unwrap_err();
-
-        // Scrolling the Viewport should trigger an UpdateView response
-        app.handle_rpc_call(ToBackend::ViewportChanged {
-            view_id,
-            height: 5,
-            first_line: 1,
-        })
-        .await?;
-
-        expect_msg!("UpdateView", to_frontend_recv, ToFrontend::UpdateView { .. } => ());
-
         Ok(())
     }
 
