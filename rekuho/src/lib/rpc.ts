@@ -1,12 +1,15 @@
 import { v4 as generateUuid } from "uuid"
 import { ensureExhaustive } from "./common"
-import { state, updateState, type CaretPosition, type State, type ViewState } from "./core"
+import { state, type CaretPosition, type State, type ViewState } from "./core"
 
-export const initSession = async () => {
+export const initSession = async (attempts?: number): Promise<Session> => {
   const websocket = new WebSocket("ws://localhost:6969")
-  await new Promise((resolve) => {
+  await new Promise((resolve, reject) => {
     websocket.onopen = (event) => resolve(event)
+    // websockets will call `Websocket.onerror` then `Websocket.onclose` on failure
+    websocket.onclose = (error) => reject(error)
   })
+  websocket.onclose = null
   return new Session(websocket)
 }
 
@@ -17,9 +20,9 @@ export class Session {
   requests: { [id: string]: (response: ToFrontend) => void }
 
   constructor(websocket: WebSocket) {
+    websocket.onmessage = (event) => this.onMessageReceived(JSON.parse(event.data))
     this.websocket = websocket
     this.requests = {}
-    websocket.onmessage = (event) => this.onMessageReceived(JSON.parse(event.data))
     state.subscribe((state) => {
       this.state = state
     })
@@ -54,8 +57,8 @@ export class Session {
    * handle mouse wheel
    * @param {number} line_delta - count of lines to scroll, positive to scroll down
    */
-  handleMouseWheel(view_id: string, line_delta: number) {
-    this.send({ method: "mouse_scroll", params: { view_id, line_delta } })
+  handleMouseWheel(view_id: string, mouseWheel: MouseWheel) {
+    this.send({ method: "mouse_scroll", params: { view_id, line_delta: mouseWheel.delta } })
   }
 
   /**
@@ -98,14 +101,14 @@ export class Session {
       method: "view_opened",
       params: {
         document_id,
-        request_id, 
+        request_id,
         height: 200,
         width: 40,
       },
     }
 
     this.send(message)
-    return new Promise((resolve) => this.requests[request_id] = resolve as any)
+    return new Promise((resolve) => (this.requests[request_id] = resolve as any))
   }
 
   /** expected behavior is for the frontend to update the viewed document */
@@ -116,8 +119,8 @@ export class Session {
       views: state.views,
       documents: {
         ...state.documents,
-        [params.document_id]: document
-      }
+        [params.document_id]: document,
+      },
     }))
 
     let viewOpenResponse = await this.requestDocumentView(params.document_id)
@@ -139,9 +142,8 @@ export class Session {
       views: {
         ...state.views,
         [params.view_id]: normal,
-      }
+      },
     }))
-    // updateState("viewId", params.view_id)
   }
 
   /** expected behavior is for the frontend to update the view */
