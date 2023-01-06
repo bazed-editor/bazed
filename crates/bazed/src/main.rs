@@ -4,7 +4,7 @@ use tracing_subscriber::{
     prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
 };
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     color_eyre::install()?;
     let fmt_layer = tracing_subscriber::fmt::layer().with_target(false).pretty();
@@ -17,11 +17,14 @@ async fn main() -> Result<()> {
         .with(ErrorLayer::default())
         .init();
 
-    let edited_file = std::env::args().nth(1);
+    tokio::spawn(async {
+        let edited_file = std::env::args().nth(1);
 
-    bazed_core::app::start("127.0.0.1:6969", edited_file.map(Into::into)).await?;
+        bazed_core::app::start("127.0.0.1:6969", edited_file.map(Into::into))
+            .await
+            .unwrap();
+    });
 
-    loop {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    }
+    bazed_tauri::run_frontend();
+    Ok(())
 }
