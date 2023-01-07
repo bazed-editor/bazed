@@ -260,6 +260,7 @@ export type MouseWheel = { modifiers: Modifier[]; delta: number }
 export type KeyInput = {
   modifiers: Modifier[]
   key: Key
+  code: string
 }
 
 export type Modifier = "ctrl" | "alt" | "shift" | "win"

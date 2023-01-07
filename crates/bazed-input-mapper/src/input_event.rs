@@ -3,13 +3,7 @@ use std::str::FromStr;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-#[derive(thiserror::Error, Debug)]
-pub enum KeyInputParseError {
-    #[error("Could not parse modifier {0}")]
-    InvalidModifier(String),
-    #[error("Input was empty")]
-    EmptyInput,
-}
+use crate::key_combo::KeyInputParseError;
 
 /// A combination of held [Modifier]s and a [Key].
 // TODO figure out normalization: Do we get `Shift+a` or do we get `Key::Char('A')`?
@@ -20,102 +14,15 @@ pub struct KeyInput {
     /// TODO make this some sort of set
     pub modifiers: Vec<Modifier>,
     pub key: Key,
-}
-
-impl std::ops::Add<Modifier> for Key {
-    type Output = KeyInput;
-
-    fn add(self, rhs: Modifier) -> Self::Output {
-        KeyInput {
-            key: self,
-            modifiers: vec![rhs],
-        }
-    }
-}
-impl std::ops::Add<Modifier> for KeyInput {
-    type Output = KeyInput;
-
-    fn add(mut self, rhs: Modifier) -> Self::Output {
-        self.modifiers.push(rhs);
-        self
-    }
-}
-
-impl From<Key> for KeyInput {
-    fn from(key: Key) -> Self {
-        Self {
-            modifiers: Vec::new(),
-            key,
-        }
-    }
-}
-
-impl KeyInput {
-    pub fn with_shift(mut self) -> Self {
-        self.modifiers.push(Modifier::Shift);
-        self
-    }
-    pub fn with_ctrl(mut self) -> Self {
-        self.modifiers.push(Modifier::Ctrl);
-        self
-    }
-    pub fn with_win(mut self) -> Self {
-        self.modifiers.push(Modifier::Win);
-        self
-    }
-    pub fn with_alt(mut self) -> Self {
-        self.modifiers.push(Modifier::Alt);
-        self
-    }
-    pub fn shift_held(&self) -> bool {
-        self.modifiers.contains(&Modifier::Shift)
-    }
-    pub fn ctrl_held(&self) -> bool {
-        self.modifiers.contains(&Modifier::Ctrl)
-    }
-    pub fn alt_held(&self) -> bool {
-        self.modifiers.contains(&Modifier::Alt)
-    }
-    pub fn win_held(&self) -> bool {
-        self.modifiers.contains(&Modifier::Win)
-    }
+    pub code: RawKey,
 }
 
 impl std::fmt::Display for KeyInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let is_capital_letter = self.key.is_key_string() && self.modifiers == [Modifier::Shift];
-        if self.modifiers.is_empty() || is_capital_letter {
+        if self.modifiers.is_empty() {
             write!(f, "{}", self.key)
         } else {
-            write!(f, "<{}-{}>", self.modifiers.iter().join("-"), self.key)
-        }
-    }
-}
-
-impl FromStr for KeyInput {
-    type Err = KeyInputParseError;
-
-    // TODO related to normalization: Do we wanna parse `A` as `<S-A>`, `A` or `<S-a>`?
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some(s) = s.strip_prefix('<').and_then(|s| s.strip_suffix('>')) {
-            let mut parts = s.split('-').peekable();
-            let mut modifiers = Vec::new();
-            while let Some(part) = parts.next() {
-                if parts.peek().is_some() {
-                    modifiers.push(part.parse()?);
-                } else {
-                    return Ok(Self {
-                        modifiers,
-                        key: Key(part.to_string()),
-                    });
-                }
-            }
-            Err(KeyInputParseError::EmptyInput)
-        } else {
-            Ok(Self {
-                modifiers: Vec::new(),
-                key: Key(s.to_string()),
-            })
+            write!(f, "<{}-{}>", self.modifiers.iter().join("-"), self.code)
         }
     }
 }
@@ -197,35 +104,43 @@ impl Key {
     }
 }
 
+/// Raw key value according to <https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values>
+#[derive(Clone, PartialEq, Eq, Debug, Hash, Serialize, Deserialize, derive_more::Display)]
+#[serde(rename_all = "snake_case")]
+pub struct RawKey(pub String);
+
+impl RawKey {
+    pub fn alpha(s: &str) -> Self {
+        Self(format!("Key{}", s.to_uppercase()))
+    }
+    pub fn num(s: &str) -> Self {
+        Self(format!("Digit{s}"))
+    }
+    pub fn key(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
+impl From<&str> for RawKey {
+    fn from(s: &str) -> Self {
+        if s.len() == 1 {
+            let c = s.chars().next().unwrap();
+            if c.is_ascii_alphabetic() {
+                Self::alpha(s)
+            } else if c.is_numeric() {
+                Self::num(s)
+            } else {
+                Self(s.to_string())
+            }
+        } else {
+            RawKey(s.to_string())
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use super::{Key, KeyInput};
-    use crate::input_event::Modifier;
-
-    #[test]
-    fn test_parse_key_input() {
-        let key_input = |modifiers, key: &str| KeyInput {
-            modifiers,
-            key: Key(key.to_string()),
-        };
-        assert_eq!(key_input(vec![], "Backspace"), "Backspace".parse().unwrap());
-        assert_eq!(
-            key_input(vec![], "Backspace"),
-            "<Backspace>".parse().unwrap(),
-        );
-        assert_eq!(
-            key_input(vec![Modifier::Ctrl], "Backspace"),
-            "<C-Backspace>".parse().unwrap(),
-        );
-        assert_eq!(
-            key_input(
-                vec![Modifier::Ctrl, Modifier::Shift, Modifier::Alt],
-                "Backspace"
-            ),
-            "<C-S-A-Backspace>".parse().unwrap(),
-        );
-        assert_eq!(key_input(vec![], "C"), "<C>".parse().unwrap());
-    }
+    use super::Key;
 
     #[test]
     fn test_key_string() {
