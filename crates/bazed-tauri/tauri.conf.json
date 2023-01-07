@@ -1,9 +1,9 @@
 {
   "build": {
-    "beforeDevCommand": "cd svelte && npm run dev",
-    "beforeBuildCommand": "cd svelte && npm run build",
+    "beforeDevCommand": "npm run dev -w ../../node_packages/bazed-svelte",
+    "beforeBuildCommand": "npm run build -w ../../node_packages/bazed-svelte",
     "devPath": "http://localhost:1420",
-    "distDir": "./svelte/build",
+    "distDir": "../../node_packages/bazed-svelte/build",
     "withGlobalTauri": false
   },
   "package": {
