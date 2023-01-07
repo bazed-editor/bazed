@@ -4,12 +4,6 @@
 
 use crate::word_boundary::WordBoundaryType;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum Trajectory {
-    Forwards,
-    Backwards,
-}
-
 /// Category of an edit, used for grouping operations into undo-groups
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum EditType {
@@ -23,7 +17,7 @@ pub enum EditType {
 #[derive(Debug, Clone)]
 pub(crate) enum BufferOp<'a> {
     Insert(String),
-    Delete(Trajectory),
+    Delete(Motion<'a>),
     Undo,
     Redo,
     DeleteSelected,
