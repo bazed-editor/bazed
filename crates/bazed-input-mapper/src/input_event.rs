@@ -13,14 +13,60 @@ pub enum KeyInputParseError {
 
 /// A combination of held [Modifier]s and a [Key].
 // TODO figure out normalization: Do we get `Shift+a` or do we get `Key::Char('A')`?
-#[derive(PartialEq, Eq, Debug, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct KeyInput {
+    /// Modifiers held down in this event.
+    /// TODO make this some sort of set
     pub modifiers: Vec<Modifier>,
     pub key: Key,
 }
 
+impl std::ops::Add<Modifier> for Key {
+    type Output = KeyInput;
+
+    fn add(self, rhs: Modifier) -> Self::Output {
+        KeyInput {
+            key: self,
+            modifiers: vec![rhs],
+        }
+    }
+}
+impl std::ops::Add<Modifier> for KeyInput {
+    type Output = KeyInput;
+
+    fn add(mut self, rhs: Modifier) -> Self::Output {
+        self.modifiers.push(rhs);
+        self
+    }
+}
+
+impl From<Key> for KeyInput {
+    fn from(key: Key) -> Self {
+        Self {
+            modifiers: Vec::new(),
+            key,
+        }
+    }
+}
+
 impl KeyInput {
+    pub fn with_shift(mut self) -> Self {
+        self.modifiers.push(Modifier::Shift);
+        self
+    }
+    pub fn with_ctrl(mut self) -> Self {
+        self.modifiers.push(Modifier::Ctrl);
+        self
+    }
+    pub fn with_win(mut self) -> Self {
+        self.modifiers.push(Modifier::Win);
+        self
+    }
+    pub fn with_alt(mut self) -> Self {
+        self.modifiers.push(Modifier::Alt);
+        self
+    }
     pub fn shift_held(&self) -> bool {
         self.modifiers.contains(&Modifier::Shift)
     }
@@ -37,7 +83,8 @@ impl KeyInput {
 
 impl std::fmt::Display for KeyInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.modifiers.is_empty() {
+        let is_capital_letter = self.key.is_key_string() && self.modifiers == [Modifier::Shift];
+        if self.modifiers.is_empty() || is_capital_letter {
             write!(f, "{}", self.key)
         } else {
             write!(f, "<{}-{}>", self.modifiers.iter().join("-"), self.key)
@@ -73,7 +120,7 @@ impl FromStr for KeyInput {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Hash, Serialize, Deserialize, derive_more::Display)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, Serialize, Deserialize, derive_more::Display)]
 #[serde(rename_all = "snake_case")]
 pub enum Modifier {
     #[display(fmt = "C")]
@@ -103,11 +150,15 @@ impl FromStr for Modifier {
 /// Keys are represented by their key attribute values as specified in <https://www.w3.org/TR/uievents-key/>,
 /// that being either a [key string](https://www.w3.org/TR/uievents-key/#key-string) or
 /// a [named key attribute value](https://www.w3.org/TR/uievents-key/#named-key-attribute-value)
-#[derive(PartialEq, Eq, Debug, Hash, Serialize, Deserialize, derive_more::Display)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash, Serialize, Deserialize, derive_more::Display)]
 #[serde(rename_all = "snake_case")]
-pub struct Key(String);
+pub struct Key(pub String);
 
 impl Key {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
     pub fn is_key_string(&self) -> bool {
         use unicode_canonical_combining_class::{
             get_canonical_combining_class, CanonicalCombiningClass,

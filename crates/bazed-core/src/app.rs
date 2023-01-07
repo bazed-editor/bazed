@@ -1,9 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
+use bazed_input_mapper::input_event::KeyInput;
 use bazed_rpc::{
     core_proto::ToBackend,
     core_proto::{CaretPosition, ToFrontend},
-    keycode::KeyInput,
     server::ClientSendHandle,
 };
 use color_eyre::Result;
@@ -40,7 +40,7 @@ impl App {
             documents: HashMap::new(),
             event_send,
             views: HashMap::new(),
-            vim_interface: VimInterface::default(),
+            vim_interface: VimInterface::new(),
         }
     }
 
@@ -259,9 +259,9 @@ pub async fn start(addr: &str, path: Option<std::path::PathBuf>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use bazed_input_mapper::input_event::{Key, KeyInput};
     use bazed_rpc::{
         core_proto::{RequestId, ToBackend, ToFrontend},
-        keycode::{Key, KeyInput},
         server::ClientSendHandle,
     };
     use futures::channel::mpsc::unbounded;
@@ -338,7 +338,7 @@ mod tests {
             view_id,
             input: KeyInput {
                 modifiers: vec![],
-                key: Key::Char('A'),
+                key: Key("A".to_string()),
             },
         })
         .await?;

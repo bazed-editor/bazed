@@ -1,4 +1,10 @@
-use bazed_rpc::keycode::{Key, KeyInput};
+use std::{collections::HashMap, sync::Arc};
+
+use bazed_input_mapper::{
+    input_event::{Key, KeyInput, Modifier},
+    keymap::{Keymap, KeymapNode},
+    InputMapper, KeymapId,
+};
 
 use crate::{
     buffer::Buffer,
@@ -6,6 +12,9 @@ use crate::{
     view::View,
     word_boundary::WordBoundaryType,
 };
+
+type MappedFn =
+    Arc<Box<dyn Fn(&View, &mut Buffer, &mut VimInterface, KeyInput) + Send + Sync + 'static>>;
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, derive_more::Display)]
 pub enum VimMode {
@@ -16,176 +25,339 @@ pub enum VimMode {
     Replace,
 }
 
-#[derive(Debug, Default)]
+impl VimMode {
+    fn keymap_id(&self) -> KeymapId {
+        let s = match self {
+            VimMode::Normal => "vim/normal",
+            VimMode::Insert => "vim/insert",
+            VimMode::Visual => "vim/visual",
+            VimMode::Replace => "vim/replace",
+        };
+        KeymapId(s.to_string())
+    }
+
+    fn corresponding_keymap(&self) -> Keymap<MappedFn> {
+        match self {
+            VimMode::Normal => normal_mode_keymap(),
+            VimMode::Insert => insert_mode_keymap(),
+            VimMode::Visual => visual_mode_keymap(),
+            VimMode::Replace => replace_mode_keymap(),
+        }
+    }
+}
+
 pub(crate) struct VimInterface {
+    pub(crate) input_mapper: InputMapper<MappedFn>,
     pub(crate) mode: VimMode,
 }
 
 impl VimInterface {
+    pub(crate) fn new() -> Self {
+        let mut input_mapper = InputMapper::from_base_keymap(
+            KeymapId("vim-mode/empty".to_string()),
+            Keymap::new_from_map(HashMap::from_iter([(
+                key("Escape").into(),
+                leaf("Normal mode", |_, _, vim, _| {
+                    tracing::warn!("Reached base keymap of vim, this shouldn't really happen");
+                    vim.switch_mode(VimMode::Normal)
+                }),
+            )])),
+        );
+        input_mapper.register_keymap(
+            VimMode::Normal.keymap_id(),
+            VimMode::Normal.corresponding_keymap(),
+        );
+        input_mapper.register_keymap(
+            VimMode::Insert.keymap_id(),
+            VimMode::Insert.corresponding_keymap(),
+        );
+        input_mapper.register_keymap(
+            VimMode::Visual.keymap_id(),
+            VimMode::Visual.corresponding_keymap(),
+        );
+        input_mapper.register_keymap(
+            VimMode::Replace.keymap_id(),
+            VimMode::Replace.corresponding_keymap(),
+        );
+        _ = input_mapper.push_keymap(VimMode::Normal.keymap_id());
+        Self {
+            input_mapper,
+            mode: VimMode::Normal,
+        }
+    }
+
+    #[tracing::instrument(skip_all, fields(mode = %self.mode))]
     pub(crate) fn on_input(&mut self, view: &View, buffer: &mut Buffer, input: KeyInput) {
-        match self.mode {
-            VimMode::Normal => self.on_input_normal_mode(view, buffer, &input),
-            VimMode::Insert => self.on_input_insert_mode(view, buffer, &input),
-            VimMode::Visual => self.on_input_visual_mode(view, buffer, &input),
-            VimMode::Replace => self.on_input_replace_mode(view, buffer, &input),
+        match self.input_mapper.on_input(input.clone()) {
+            Some(KeymapNode::Leaf(_, f)) => f.clone()(view, buffer, self, input),
+            Some(KeymapNode::Submap(x, _)) => tracing::info!("In submap {x}"),
+            None => tracing::info!("No mapping for {input}"),
         }
-    }
-
-    pub(crate) fn on_input_normal_mode(
-        &mut self,
-        view: &View,
-        buffer: &mut Buffer,
-        input: &KeyInput,
-    ) {
-        if let Some(motion) = key_to_motion_normal(input.ctrl_held(), &input.key) {
-            buffer.apply_buffer_op(&view.vp, BufferOp::Move(motion));
-            return;
-        }
-        match input.key {
-            Key::Char('i') => self.switch_mode(VimMode::Insert),
-            Key::Char('v') => self.switch_mode(VimMode::Visual),
-            Key::Char('r') if input.shift_held() => self.switch_mode(VimMode::Replace),
-            Key::Char('w') => buffer.apply_buffer_op(
-                &view.vp,
-                BufferOp::Move(Motion::NextWordBoundary(WordBoundaryType::Start)),
-            ),
-            Key::Char('b') => buffer.apply_buffer_op(
-                &view.vp,
-                BufferOp::Move(Motion::PrevWordBoundary(WordBoundaryType::Start)),
-            ),
-            Key::Char('e') => buffer.apply_buffer_op(
-                &view.vp,
-                BufferOp::Move(Motion::NextWordBoundary(WordBoundaryType::End)),
-            ),
-            Key::Char('x') => {
-                buffer.apply_buffer_op(&view.vp, BufferOp::Delete(Trajectory::Forwards))
-            },
-            Key::Char('u') => buffer.apply_buffer_op(&view.vp, BufferOp::Undo),
-            Key::Char('r') if input.ctrl_held() => buffer.apply_buffer_op(&view.vp, BufferOp::Redo),
-            Key::Char('0') => buffer.apply_buffer_op(&view.vp, BufferOp::Move(Motion::StartOfLine)),
-            Key::Char('$') => buffer.apply_buffer_op(&view.vp, BufferOp::Move(Motion::EndOfLine)),
-            _ => {},
-        }
-    }
-
-    pub(crate) fn on_input_insert_mode(
-        &mut self,
-        view: &View,
-        buffer: &mut Buffer,
-        input: &KeyInput,
-    ) {
-        if self.on_movement_key(view, buffer, &input) {
-            return;
-        }
-        match input.key {
-            Key::Char(c) => buffer.apply_buffer_op(&view.vp, BufferOp::Insert(c.to_string())),
-            Key::Backspace => {
-                buffer.apply_buffer_op(&view.vp, BufferOp::Delete(Trajectory::Backwards))
-            },
-            Key::Delete => buffer.apply_buffer_op(&view.vp, BufferOp::Delete(Trajectory::Forwards)),
-            Key::Return => buffer.apply_buffer_op(&view.vp, BufferOp::Insert("\n".to_string())),
-            Key::Tab => buffer.apply_buffer_op(&view.vp, BufferOp::Insert("\t".to_string())),
-            Key::Escape => self.switch_mode(VimMode::Normal),
-            _ => {},
-        }
-    }
-
-    pub(crate) fn on_input_visual_mode(
-        &mut self,
-        view: &View,
-        buffer: &mut Buffer,
-        input: &KeyInput,
-    ) {
-        if let Some(motion) = key_to_motion_normal(input.ctrl_held(), &input.key) {
-            buffer.apply_buffer_op(&view.vp, BufferOp::Selection(motion));
-            return;
-        }
-        match input.key {
-            Key::Escape => {
-                self.mode = VimMode::Normal;
-                buffer.collapse_selections();
-            },
-            Key::Char('d') | Key::Char('x') => {
-                buffer.apply_buffer_op(&view.vp, BufferOp::DeleteSelected);
-            },
-            _ => {
-                if let Some(motion) = key_to_motion(input.ctrl_held(), &input.key) {
-                    buffer.apply_buffer_op(&view.vp, BufferOp::Selection(motion));
-                }
-            },
-        }
-    }
-
-    pub(crate) fn on_input_replace_mode(
-        &mut self,
-        view: &View,
-        buffer: &mut Buffer,
-        input: &KeyInput,
-    ) {
-        if self.on_movement_key(view, buffer, input) {
-            return;
-        }
-        match input.key {
-            Key::Escape => {
-                self.mode = VimMode::Normal;
-            },
-            Key::Char(c) => buffer.replace_at_carets(&c.to_string()),
-            _ => {},
-        }
-    }
-
-    /// Handle regular movement keys (usable for normal and insert mode)
-    fn on_movement_key(&mut self, view: &View, buffer: &mut Buffer, input: &KeyInput) -> bool {
-        let Some(motion) = key_to_motion(input.ctrl_held(), &input.key)  else {
-            return false;
-        };
-        let op = if input.alt_held() {
-            BufferOp::NewCaret(motion)
-        } else {
-            BufferOp::Move(motion)
-        };
-        buffer.apply_buffer_op(&view.vp, op);
-        true
     }
 
     fn switch_mode(&mut self, mode: VimMode) {
+        self.input_mapper.deactivate_keymap(self.mode.keymap_id());
+        if let Err(err) = self.input_mapper.push_keymap(mode.keymap_id()) {
+            tracing::error!("Error switching vim mode: {err}");
+        }
         self.mode = mode;
     }
 }
 
-/// Map a movement key into the corresponding [Motion], assuming normal mode
-fn key_to_motion_normal(ctrl_held: bool, key: &Key) -> Option<Motion> {
-    if let Some(motion) = key_to_motion(ctrl_held, key) {
-        return Some(motion);
-    }
-    return Some(match key {
-        Key::Char('w') => Motion::NextWordBoundary(WordBoundaryType::Start),
-        Key::Char('b') => Motion::PrevWordBoundary(WordBoundaryType::Start),
-        Key::Char('e') => Motion::NextWordBoundary(WordBoundaryType::End),
-
-        Key::Char('h') => Motion::Left,
-        Key::Char('l') => Motion::Right,
-        Key::Char('k') => Motion::Up,
-        Key::Char('j') => Motion::Down,
-        Key::Char('0') => Motion::StartOfLine,
-        Key::Char('$') => Motion::EndOfLine,
-        _ => return None,
-    });
+pub(crate) fn replace_mode_keymap() -> Keymap<MappedFn> {
+    let on_printable: MappedFn = Arc::new(Box::new(|_, b, _, k| {
+        b.replace_at_carets(&k.to_string());
+    }));
+    Keymap::new(
+        HashMap::from_iter([(
+            key("Escape").into(),
+            leaf("normal mode", |_, _, vim, _| {
+                vim.switch_mode(VimMode::Normal)
+            }),
+        )]),
+        Some(KeymapNode::Leaf("insert".to_string(), on_printable)),
+    )
 }
 
-/// Map a movement key into the corresponding [Motion].
-/// This most likely won't scale to our future architecture, but it works for now
-fn key_to_motion(ctrl_held: bool, key: &Key) -> Option<Motion> {
-    match key {
-        Key::Right if ctrl_held => Some(Motion::NextWordBoundary(WordBoundaryType::Start)),
-        Key::Left if ctrl_held => Some(Motion::PrevWordBoundary(WordBoundaryType::Start)),
+pub(crate) fn normal_mode_keymap() -> Keymap<MappedFn> {
+    normal_mode_movement_key_keymap().merge(Keymap::new_from_map(HashMap::from_iter([
+        (
+            key("i").into(),
+            leaf("insert mode", |_, _, vim, _| {
+                vim.switch_mode(VimMode::Insert)
+            }),
+        ),
+        (
+            key("n") + Modifier::Alt,
+            KeymapNode::Submap("new caret".to_string(), Box::new(add_caret_keymap())),
+        ),
+        (
+            key("v").into(),
+            leaf("visual mode", |_, _, vim, _| {
+                vim.switch_mode(VimMode::Visual)
+            }),
+        ),
+        (
+            key("r") + Modifier::Shift,
+            leaf("replace mode", |_, _, vim, _| {
+                vim.switch_mode(VimMode::Replace)
+            }),
+        ),
+        (
+            key("x").into(),
+            leaf("", |v, b, _, _| {
+                b.apply_buffer_op(&v.vp, BufferOp::Delete(Trajectory::Forwards))
+            }),
+        ),
+        (
+            key("u").into(),
+            leaf("", |v, b, _, _| b.apply_buffer_op(&v.vp, BufferOp::Undo)),
+        ),
+        (
+            key("r") + Modifier::Ctrl,
+            leaf("", |v, b, _, _| b.apply_buffer_op(&v.vp, BufferOp::Redo)),
+        ),
+        (
+            key("0").into(),
+            leaf("", |v, b, _, _| {
+                b.apply_buffer_op(&v.vp, BufferOp::Move(Motion::StartOfLine))
+            }),
+        ),
+        (
+            key("$").into(),
+            leaf("", |v, b, _, _| {
+                b.apply_buffer_op(&v.vp, BufferOp::Move(Motion::EndOfLine))
+            }),
+        ),
+    ])))
+}
 
-        Key::Left => Some(Motion::Left),
-        Key::Right => Some(Motion::Right),
-        Key::Up => Some(Motion::Up),
-        Key::Down => Some(Motion::Down),
-        Key::Home => Some(Motion::StartOfLine),
-        Key::End => Some(Motion::EndOfLine),
-        _ => None,
-    }
+fn insert_mode_keymap() -> Keymap<MappedFn> {
+    let on_printable: MappedFn = mapping(|v, b: &mut Buffer, _, k: KeyInput| {
+        b.apply_buffer_op(&v.vp, BufferOp::Insert(k.to_string()));
+    });
+    movement_key_keymap().merge(Keymap::new(
+        HashMap::from_iter([
+            (
+                key("Backspace").into(),
+                leaf("backspace", |v, b, _, _| {
+                    b.apply_buffer_op(&v.vp, BufferOp::Delete(Trajectory::Backwards))
+                }),
+            ),
+            (
+                key("Delete").into(),
+                leaf("backspace", |v, b, _, _| {
+                    b.apply_buffer_op(&v.vp, BufferOp::Delete(Trajectory::Forwards))
+                }),
+            ),
+            (
+                key("Enter").into(),
+                leaf("backspace", |v, b, _, _| {
+                    b.apply_buffer_op(&v.vp, BufferOp::Insert("\n".to_string()))
+                }),
+            ),
+            (
+                key("Tab").into(),
+                leaf("backspace", |v, b, _, _| {
+                    b.apply_buffer_op(&v.vp, BufferOp::Insert("\t".to_string()))
+                }),
+            ),
+            (
+                key("Escape").into(),
+                leaf("normal mode", |_, _, vim, _| {
+                    vim.switch_mode(VimMode::Normal)
+                }),
+            ),
+        ]),
+        Some(KeymapNode::Leaf("type".to_string(), on_printable)),
+    ))
+}
+
+fn visual_mode_keymap() -> Keymap<MappedFn> {
+    let visual_mode_movement = normal_mode_movement_key_motion_keymap().map(&|motion| {
+        mapping(move |v, b, _, _| b.apply_buffer_op(&v.vp, BufferOp::Selection(motion)))
+    });
+    let keymap = Keymap::new_from_map(HashMap::from_iter([
+        (
+            key("Escape").into(),
+            leaf("normal mode", |_, b, vim, _| {
+                vim.switch_mode(VimMode::Normal);
+                b.collapse_selections();
+            }),
+        ),
+        (
+            key("d").into(),
+            leaf("delete", |v, b, _, _| {
+                b.apply_buffer_op(&v.vp, BufferOp::DeleteSelected);
+            }),
+        ),
+        (
+            key("x").into(),
+            leaf("delete", |v, b, _, _| {
+                b.apply_buffer_op(&v.vp, BufferOp::DeleteSelected);
+            }),
+        ),
+    ]));
+    visual_mode_movement.merge(keymap)
+}
+
+fn add_caret_keymap() -> Keymap<MappedFn> {
+    normal_mode_movement_key_motion_keymap().map(&|motion: Motion| {
+        mapping(move |v, b, _, _| b.apply_buffer_op(&v.vp, BufferOp::NewCaret(motion)))
+    })
+}
+
+fn normal_mode_movement_key_keymap() -> Keymap<MappedFn> {
+    normal_mode_movement_key_motion_keymap().map(&|motion: Motion| {
+        mapping(move |v, b, _, _| b.apply_buffer_op(&v.vp, BufferOp::Move(motion)))
+    })
+}
+
+fn movement_key_keymap() -> Keymap<MappedFn> {
+    movement_key_motion_keymap()
+        .map(&|motion| mapping(move |v, b, _, _| b.apply_buffer_op(&v.vp, BufferOp::Move(motion))))
+}
+
+fn normal_mode_movement_key_motion_keymap() -> Keymap<Motion<'static>> {
+    let normal_mode_movement_binds = Keymap::new_from_map(HashMap::from_iter([
+        (
+            key("w").into(),
+            KeymapNode::Leaf(
+                "to next word".to_string(),
+                Motion::NextWordBoundary(WordBoundaryType::Start),
+            ),
+        ),
+        (
+            key("b").into(),
+            KeymapNode::Leaf(
+                "to previous word".to_string(),
+                Motion::PrevWordBoundary(WordBoundaryType::Start),
+            ),
+        ),
+        (
+            key("h").into(),
+            KeymapNode::Leaf("left".to_string(), Motion::Left),
+        ),
+        (
+            key("l").into(),
+            KeymapNode::Leaf("right".to_string(), Motion::Right),
+        ),
+        (
+            key("k").into(),
+            KeymapNode::Leaf("up".to_string(), Motion::Up),
+        ),
+        (
+            key("j").into(),
+            KeymapNode::Leaf("down".to_string(), Motion::Down),
+        ),
+        (
+            key("0").into(),
+            KeymapNode::Leaf("to start of line".to_string(), Motion::StartOfLine),
+        ),
+        (
+            key("$").into(),
+            KeymapNode::Leaf("to end of line".to_string(), Motion::EndOfLine),
+        ),
+    ]));
+    normal_mode_movement_binds.merge(movement_key_motion_keymap())
+}
+
+fn movement_key_motion_keymap() -> Keymap<Motion<'static>> {
+    Keymap::new_from_map(HashMap::from_iter([
+        (
+            key("ArrowRight") + Modifier::Ctrl,
+            KeymapNode::Leaf(
+                "to next word".to_string(),
+                Motion::NextWordBoundary(WordBoundaryType::Start),
+            ),
+        ),
+        (
+            key("ArrowLeft") + Modifier::Ctrl,
+            KeymapNode::Leaf(
+                "to previous word".to_string(),
+                Motion::PrevWordBoundary(WordBoundaryType::Start),
+            ),
+        ),
+        (
+            key("ArrowLeft").into(),
+            KeymapNode::Leaf("left".to_string(), Motion::Left),
+        ),
+        (
+            key("ArrowRight").into(),
+            KeymapNode::Leaf("right".to_string(), Motion::Right),
+        ),
+        (
+            key("ArrowUp").into(),
+            KeymapNode::Leaf("up".to_string(), Motion::Up),
+        ),
+        (
+            key("ArrowDown").into(),
+            KeymapNode::Leaf("down".to_string(), Motion::Down),
+        ),
+        (
+            key("Home").into(),
+            KeymapNode::Leaf("to start of line".to_string(), Motion::StartOfLine),
+        ),
+        (
+            key("End").into(),
+            KeymapNode::Leaf("to end of line".to_string(), Motion::EndOfLine),
+        ),
+    ]))
+}
+
+fn key(k: &str) -> Key {
+    Key(k.to_string())
+}
+
+fn leaf<F: Fn(&View, &mut Buffer, &mut VimInterface, KeyInput) + Send + Sync + 'static>(
+    desc: &str,
+    f: F,
+) -> KeymapNode<MappedFn> {
+    KeymapNode::Leaf(desc.to_string(), mapping(f))
+}
+
+fn mapping<F: Fn(&View, &mut Buffer, &mut VimInterface, KeyInput) + Send + Sync + 'static>(
+    f: F,
+) -> MappedFn {
+    Arc::new(Box::new(f))
 }

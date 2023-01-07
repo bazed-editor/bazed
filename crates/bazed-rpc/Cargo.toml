@@ -19,3 +19,4 @@ futures.workspace = true
 tokio.workspace = true
 tokio-tungstenite = "0.18.0"
 tracing.workspace = true
+bazed-input-mapper.workspace  = true
