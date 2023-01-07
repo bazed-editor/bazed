@@ -13,6 +13,7 @@ use keymap::{Keymap, KeymapNode};
 use nonempty::NonEmpty;
 
 pub mod input_event;
+pub mod key_combo;
 pub mod keymap;
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]

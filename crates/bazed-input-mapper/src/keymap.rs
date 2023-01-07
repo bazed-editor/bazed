@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 
-use crate::input_event::{KeyInput, Modifier};
+use crate::{
+    input_event::{KeyInput, Modifier},
+    key_combo::Combo,
+};
 
 #[derive(Debug)]
 pub struct Keymap<V> {
-    pub map: HashMap<KeyInput, KeymapNode<V>>,
+    pub map: HashMap<Combo, KeymapNode<V>>,
     /// If no other map was matched, but the pressed key is a printable character
     /// (corresponding to <https://www.w3.org/TR/uievents-key/#key-string>)
     /// this node will be matched
@@ -45,7 +48,7 @@ impl<V> KeymapNode<V> {
 
 impl<V> Keymap<V> {
     pub fn new(
-        map: HashMap<KeyInput, KeymapNode<V>>,
+        map: HashMap<Combo, KeymapNode<V>>,
         on_any_printable: Option<KeymapNode<V>>,
     ) -> Self {
         Self {
@@ -75,11 +78,11 @@ impl<V> Keymap<V> {
         self
     }
 
-    pub fn new_from_map(map: HashMap<KeyInput, KeymapNode<V>>) -> Self {
+    pub fn new_from_map(map: HashMap<Combo, KeymapNode<V>>) -> Self {
         Self::new(map, None)
     }
 
-    pub fn descriptions(&self) -> impl Iterator<Item = (&KeyInput, &str)> {
+    pub fn descriptions(&self) -> impl Iterator<Item = (&Combo, &str)> {
         self.map.iter().map(|(k, v)| (k, v.description()))
     }
 
@@ -93,11 +96,14 @@ impl<V> Keymap<V> {
     }
 
     pub fn node_at_input(&self, input: &KeyInput) -> Option<&KeymapNode<V>> {
-        self.map.get(input).or_else(|| {
-            self.on_any_printable
-                .as_ref()
-                .filter(|_| input_is_printable(input))
-        })
+        self.map
+            .get(&Combo::from_keyinput_raw(input.clone()))
+            .or_else(|| self.map.get(&Combo::from_keyinput_str(input.clone())))
+            .or_else(|| {
+                self.on_any_printable
+                    .as_ref()
+                    .filter(|_| input_is_printable(input))
+            })
     }
 
     pub fn node_at_path(&self, inputs: &[KeyInput]) -> Option<&KeymapNode<V>> {

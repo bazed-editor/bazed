@@ -259,7 +259,7 @@ pub async fn start(addr: &str, path: Option<std::path::PathBuf>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use bazed_input_mapper::input_event::{Key, KeyInput};
+    use bazed_input_mapper::input_event::{Key, KeyInput, RawKey};
     use bazed_rpc::{
         core_proto::{RequestId, ToBackend, ToFrontend},
         server::ClientSendHandle,
@@ -339,6 +339,7 @@ mod tests {
             input: KeyInput {
                 modifiers: vec![],
                 key: Key("A".to_string()),
+                code: RawKey("KeyA".to_string()),
             },
         })
         .await?;

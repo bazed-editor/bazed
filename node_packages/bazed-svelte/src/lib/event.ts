@@ -1,4 +1,4 @@
-import type { KeyInput, Key, Modifier } from "./rpc"
+import type { KeyInput, Modifier } from "./rpc"
 
 export const getModifiers = (event: WheelEvent | KeyboardEvent): Modifier[] => {
   const modifiers: Modifier[] = []
@@ -11,7 +11,7 @@ export const getModifiers = (event: WheelEvent | KeyboardEvent): Modifier[] => {
 
 export const keyboardToKeyInput = (event: KeyboardEvent): KeyInput | null => {
   const modifiers = getModifiers(event)
-  return { modifiers, key: event.key }
+  return { modifiers, key: event.key, code: event.code }
 }
 
 export const wheelDelta = (event: WheelEvent): number => {
