@@ -2,8 +2,10 @@
 
 use std::collections::HashMap;
 
+use itertools::Itertools;
+
 use crate::{
-    input_event::{KeyInput, Modifier},
+    input_event::{KeyInput, Modifiers},
     key_combo::Combo,
 };
 
@@ -80,13 +82,9 @@ impl<V> Keymap<V> {
         } = other;
         for (k, v) in map.into_iter() {
             match self.map.remove(&k) {
-                Some(node) => {
-                    self.map.insert(k, node.merge(v));
-                },
-                None => {
-                    self.map.insert(k, v);
-                },
-            }
+                Some(node) => self.map.insert(k, node.merge(v)),
+                None => self.map.insert(k, v),
+            };
         }
         self.on_any_printable = on_any_printable.or(self.on_any_printable);
         self
@@ -108,14 +106,25 @@ impl<V> Keymap<V> {
 
     /// Get the [KeymapNode] corresponding to the given input, if there is one
     pub fn node_at_input(&self, input: &KeyInput) -> Option<&KeymapNode<V>> {
-        self.map
-            .get(&Combo::from_keyinput_raw(input.clone()))
-            .or_else(|| self.map.get(&Combo::from_keyinput_str(input.clone())))
-            .or_else(|| {
-                self.on_any_printable
-                    .as_ref()
-                    .filter(|_| input_is_printable(input))
-            })
+        // This is surprisingly complex, as we have to check the powerset of all modifiers
+        // held, as we may discard some of the mods when matching against translated keys.
+        let mut result = self.map.get(&Combo::from_keyinput_raw(input.clone()));
+        if let Some(result) = result {
+            return Some(result);
+        }
+        for mod_set in input.modifiers.into_iter().powerset() {
+            let mods = mod_set.into_iter().fold(Modifiers::empty(), |a, b| a | b);
+            result = result.or_else(|| {
+                self.map.get(dbg!(
+                    &Combo::from_keyinput_str(input.clone()).with_mods(mods)
+                ))
+            });
+        }
+        result.or_else(|| {
+            self.on_any_printable
+                .as_ref()
+                .filter(|_| input_is_printable(input))
+        })
     }
 
     /// Get the [KeymapNode] corresponding to the given chain of inputs, if there is one
@@ -130,6 +139,5 @@ impl<V> Keymap<V> {
 }
 
 fn input_is_printable(input: &KeyInput) -> bool {
-    (input.modifiers.is_empty() || input.modifiers == [Modifier::Shift])
-        && input.key.is_key_string()
+    (input.modifiers.is_empty() || input.modifiers == Modifiers::SHIFT) && input.key.is_key_string()
 }

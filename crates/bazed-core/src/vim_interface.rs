@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bazed_input_mapper::{
-    input_event::{KeyInput, Modifier},
+    input_event::{Key, KeyInput, Modifiers},
     key_combo::{Combo, KeySpec},
     keymap::{Keymap, KeymapNode},
     InputMapper, KeymapId,
@@ -129,7 +129,7 @@ pub(crate) fn normal_mode_keymap() -> Keymap<MappedFn> {
             }),
         ),
         (
-            key("n") + Modifier::Alt,
+            key("n").with_mods(Modifiers::ALT),
             KeymapNode::Submap("new caret".to_string(), Box::new(add_caret_keymap())),
         ),
         (
@@ -139,7 +139,7 @@ pub(crate) fn normal_mode_keymap() -> Keymap<MappedFn> {
             }),
         ),
         (
-            key("r") + Modifier::Shift,
+            key("r").with_mods(Modifiers::SHIFT),
             leaf("replace mode", |_, _, vim, _| {
                 vim.switch_mode(VimMode::Replace)
             }),
@@ -155,7 +155,7 @@ pub(crate) fn normal_mode_keymap() -> Keymap<MappedFn> {
             leaf("", |v, b, _, _| b.apply_buffer_op(&v.vp, BufferOp::Undo)),
         ),
         (
-            key("r") + Modifier::Ctrl,
+            key("r").with_mods(Modifiers::CTRL),
             leaf("", |v, b, _, _| b.apply_buffer_op(&v.vp, BufferOp::Redo)),
         ),
         (
@@ -165,7 +165,7 @@ pub(crate) fn normal_mode_keymap() -> Keymap<MappedFn> {
             }),
         ),
         (
-            key("4") + Modifier::Shift,
+            translated_key("$"),
             leaf("", |v, b, _, _| {
                 b.apply_buffer_op(&v.vp, BufferOp::Move(Motion::EndOfLine))
             }),
@@ -287,7 +287,7 @@ fn normal_mode_movement_key_motion_keymap() -> Keymap<Motion<'static>> {
             KeymapNode::Leaf("to start of line".to_string(), Motion::StartOfLine),
         ),
         (
-            key("$"),
+            translated_key("$"),
             KeymapNode::Leaf("to end of line".to_string(), Motion::EndOfLine),
         ),
     ]));
@@ -297,14 +297,14 @@ fn normal_mode_movement_key_motion_keymap() -> Keymap<Motion<'static>> {
 fn movement_key_motion_keymap() -> Keymap<Motion<'static>> {
     Keymap::new_from_map(HashMap::from_iter([
         (
-            key("ArrowRight") + Modifier::Ctrl,
+            key("ArrowRight").with_mods(Modifiers::CTRL),
             KeymapNode::Leaf(
                 "to next word".to_string(),
                 Motion::NextWordBoundary(WordBoundaryType::Start),
             ),
         ),
         (
-            key("ArrowLeft") + Modifier::Ctrl,
+            key("ArrowLeft").with_mods(Modifiers::CTRL),
             KeymapNode::Leaf(
                 "to previous word".to_string(),
                 Motion::PrevWordBoundary(WordBoundaryType::Start),
@@ -339,6 +339,9 @@ fn movement_key_motion_keymap() -> Keymap<Motion<'static>> {
 
 fn key(k: &str) -> Combo {
     Combo::from(KeySpec::Raw(k.into()))
+}
+fn translated_key(k: &str) -> Combo {
+    Combo::from(KeySpec::Str(Key(k.to_string())))
 }
 
 fn leaf<F: Fn(&View, &mut Buffer, &mut VimInterface, KeyInput) + Send + Sync + 'static>(

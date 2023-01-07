@@ -255,13 +255,13 @@ type MouseScroll = Message<
   }
 >
 
-export type MouseWheel = { modifiers: Modifier[]; delta: number }
+export type MouseWheel = { modifiers: Modifiers; delta: number }
 
 export type KeyInput = {
-  modifiers: Modifier[]
+  modifiers: Modifiers
   key: Key
   code: string
 }
 
-export type Modifier = "ctrl" | "alt" | "shift" | "win"
+export type Modifiers = number
 export type Key = string

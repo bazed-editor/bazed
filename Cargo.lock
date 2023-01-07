@@ -137,6 +137,7 @@ dependencies = [
 name = "bazed-input-mapper"
 version = "0.0.0"
 dependencies = [
+ "bitflags",
  "derive_more",
  "itertools",
  "nonempty",
