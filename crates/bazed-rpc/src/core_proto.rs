@@ -1,9 +1,8 @@
 use std::path::PathBuf;
 
+use bazed_input_mapper::input_event::KeyInput;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-use crate::keycode::KeyInput;
 
 /// Id of a request, which is any RPC invocation that expects a response.
 #[derive(Debug, Serialize, Deserialize)]

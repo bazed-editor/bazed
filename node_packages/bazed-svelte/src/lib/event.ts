@@ -11,37 +11,7 @@ export const getModifiers = (event: WheelEvent | KeyboardEvent): Modifier[] => {
 
 export const keyboardToKeyInput = (event: KeyboardEvent): KeyInput | null => {
   const modifiers = getModifiers(event)
-
-  let key: Key | null = null
-  if (event.key.length === 1) {
-    key = { char: event.key }
-  }
-
-  switch (event.key) {
-    case "Enter":
-      key = "return"
-      break
-    case "Backspace":
-      key = "backspace"
-      break
-    case "ArrowLeft":
-      key = "left"
-      break
-    case "ArrowRight":
-      key = "right"
-      break
-    case "ArrowUp":
-      key = "up"
-      break
-    case "ArrowDown":
-      key = "down"
-      break
-    case "Escape":
-      key = "escape"
-      break
-  }
-
-  return key ? { modifiers, key } : null
+  return { modifiers, key: event.key }
 }
 
 export const wheelDelta = (event: WheelEvent): number => {
