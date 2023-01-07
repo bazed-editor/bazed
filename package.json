@@ -1,0 +1,6 @@
+{
+  "name": "bazed",
+  "workspaces": [
+    "node_packages/*"
+  ]
+}

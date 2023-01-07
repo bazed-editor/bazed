@@ -1,7 +1,8 @@
 fn main() {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let npm_command = std::env::var("CARGO_NPM_COMMAND").unwrap_or("npm".to_string());
-    let svelte_dir = format!("{manifest_dir}/svelte");
+    let npm_workspace_root = format!("{manifest_dir}/../..");
+    let svelte_dir = format!("{npm_workspace_root}/node_packages/bazed-svelte");
 
     println!("cargo:rerun-if-changed={manifest_dir}/build.rs");
     println!("cargo:rerun-if-changed={svelte_dir}/src");
@@ -9,7 +10,7 @@ fn main() {
     println!("cargo:rerun-if-changed={svelte_dir}/svelte.config.js");
 
     let status = std::process::Command::new(&npm_command)
-        .args(&["--prefix", &svelte_dir, "ci"])
+        .args(&["--prefix", &npm_workspace_root, "ci", "-w", &svelte_dir])
         .status()
         .expect("npm ci failed");
 
@@ -18,7 +19,14 @@ fn main() {
     }
 
     let status = std::process::Command::new(&npm_command)
-        .args(&["run", "--prefix", &svelte_dir, "build"])
+        .args(&[
+            "run",
+            "--prefix",
+            &npm_workspace_root,
+            "build",
+            "-w",
+            &svelte_dir,
+        ])
         .status()
         .expect("npm run build failed");
 
