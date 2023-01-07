@@ -17,7 +17,7 @@ use self::{
 };
 use crate::{
     region::Region,
-    user_buffer_op::{BufferOp, EditType, Motion, Trajectory},
+    user_buffer_op::{BufferOp, EditType, Motion},
     view::Viewport,
 };
 
@@ -184,15 +184,12 @@ impl Buffer {
         self.commit_delta(delta, EditType::Delete);
     }
 
-    fn delete_at_carets(&mut self, traj: Trajectory) {
+    fn delete_at_carets(&mut self, vp: &Viewport, motion: Motion<'_>) {
         let mut builder = DeltaBuilder::new(self.text.len());
         for region in self.regions.carets() {
             // See xi-editors `offset_for_delete_backwards` function in backward.rs...
             // all I'll say is `#[allow(clippy::cognitive_complexity)]`.
-            let range = match traj {
-                Trajectory::Forwards => region.head..self.text.len().min(region.head + 1),
-                Trajectory::Backwards => (1.max(region.head) - 1)..region.head,
-            };
+            let range = apply_motion_to_region(&self.text, &vp, region, true, motion);
             builder.delete(range);
         }
         let delta = builder.build();
@@ -278,7 +275,7 @@ impl Buffer {
         // Insertion should replace, backspace should delete, etc. How do we implement that cleanly?
         match op {
             BufferOp::Insert(text) => self.insert_at_carets(&text),
-            BufferOp::Delete(traj) => self.delete_at_carets(traj),
+            BufferOp::Delete(motion) => self.delete_at_carets(vp, motion),
             BufferOp::DeleteSelected => self.delete_in_selections(),
             BufferOp::Undo => self.undo(),
             BufferOp::Redo => self.redo(),
@@ -364,7 +361,7 @@ mod test {
     fn test_delete_forwards() {
         test_util::setup_test();
         let mut b = Buffer::new_from_string("a".to_string());
-        b.delete_at_carets(Trajectory::Forwards);
+        b.delete_at_carets(&Viewport::new_ginormeous(), Motion::Right);
         assert_eq!("", b.content_to_string());
     }
 
@@ -373,26 +370,24 @@ mod test {
         test_util::setup_test();
         let mut b = Buffer::new_from_string("a".to_string());
         b.regions.set_primary_caret(Region::sticky_cursor(1));
-        b.delete_at_carets(Trajectory::Backwards);
+        b.delete_at_carets(&Viewport::new_ginormeous(), Motion::Left);
         assert_eq!("", b.content_to_string());
     }
 
-    /// For now, `delete_backwards_at_carets` collapses selections into cursors,
-    /// and then backspaces as usual. Not sure if this is the behavior we want...
     #[test]
     fn test_delete_selection() {
         test_util::setup_test();
         let mut b = Buffer::new_from_string("hello".to_string());
         b.regions.set_primary_caret(Region::sticky(1, 3));
-        b.delete_at_carets(Trajectory::Backwards);
-        assert_eq!("ello", b.content_to_string());
+        b.delete_at_carets(&Viewport::new_ginormeous(), Motion::Left);
+        assert_eq!("lo", b.content_to_string());
     }
 
     #[test]
     fn test_delete_empty() {
         test_util::setup_test();
         let mut b = Buffer::new_empty();
-        b.delete_at_carets(Trajectory::Backwards);
+        b.delete_at_carets(&Viewport::new_ginormeous(), Motion::Left);
         assert_eq!("", b.content_to_string());
     }
 
@@ -562,7 +557,7 @@ mod test {
         let mut b = Buffer::new_empty();
         let vp = Viewport::new_ginormeous();
         b.insert_at_carets("heyy");
-        b.delete_at_carets(Trajectory::Backwards);
+        b.delete_at_carets(&Viewport::new_ginormeous(), Motion::Left);
         b.insert_at_carets("\nho");
         b.move_carets(&vp, Motion::Up);
         b.undo();
@@ -577,7 +572,7 @@ mod test {
         test_util::setup_test();
         let mut b = Buffer::new_empty();
         b.insert_at_carets("heyy");
-        b.delete_at_carets(Trajectory::Backwards);
+        b.delete_at_carets(&Viewport::new_ginormeous(), Motion::Left);
         b.insert_at_carets("ho");
         b.undo();
         assert_eq!(3, b.all_caret_positions().first().col);
@@ -590,7 +585,7 @@ mod test {
         b.undo();
         assert_eq!("", b.content_to_string());
         b.insert_at_carets("hey");
-        b.delete_at_carets(Trajectory::Backwards);
+        b.delete_at_carets(&Viewport::new_ginormeous(), Motion::Left);
         b.insert_at_carets("llo");
         b.insert_at_carets(" world");
         assert_eq!("hello world", b.content_to_string());
@@ -622,7 +617,7 @@ mod test {
         b.undo();
         assert_eq!("", b.content_to_string());
         b.insert_at_carets("hey");
-        b.delete_at_carets(Trajectory::Backwards);
+        b.delete_at_carets(&Viewport::new_ginormeous(), Motion::Left);
         b.insert_at_carets("llo");
         assert_eq!("hello", b.content_to_string());
         b.undo();

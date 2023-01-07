@@ -115,9 +115,8 @@ impl<V> Keymap<V> {
         for mod_set in input.modifiers.into_iter().powerset() {
             let mods = mod_set.into_iter().fold(Modifiers::empty(), |a, b| a | b);
             result = result.or_else(|| {
-                self.map.get(dbg!(
-                    &Combo::from_keyinput_str(input.clone()).with_mods(mods)
-                ))
+                self.map
+                    .get(&Combo::from_keyinput_str(input.clone()).with_mods(mods))
             });
         }
         result.or_else(|| {

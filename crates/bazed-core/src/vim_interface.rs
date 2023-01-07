@@ -9,7 +9,7 @@ use bazed_input_mapper::{
 
 use crate::{
     buffer::Buffer,
-    user_buffer_op::{BufferOp, Motion, Trajectory},
+    user_buffer_op::{BufferOp, Motion},
     view::View,
     word_boundary::WordBoundaryType,
 };
@@ -147,7 +147,7 @@ pub(crate) fn normal_mode_keymap() -> Keymap<MappedFn> {
         (
             key("x"),
             leaf("", |v, b, _, _| {
-                b.apply_buffer_op(&v.vp, BufferOp::Delete(Trajectory::Forwards))
+                b.apply_buffer_op(&v.vp, BufferOp::Delete(Motion::Right))
             }),
         ),
         (
@@ -170,6 +170,27 @@ pub(crate) fn normal_mode_keymap() -> Keymap<MappedFn> {
                 b.apply_buffer_op(&v.vp, BufferOp::Move(Motion::EndOfLine))
             }),
         ),
+        (
+            key("d"),
+            KeymapNode::Submap(
+                "delete".to_string(),
+                Box::new(normal_mode_movement_key_motion_keymap().map(&|motion| {
+                    mapping(move |v, b, _, _| b.apply_buffer_op(&v.vp, BufferOp::Delete(motion)))
+                })),
+            ),
+        ),
+        (
+            key("c"),
+            KeymapNode::Submap(
+                "change".to_string(),
+                Box::new(normal_mode_movement_key_motion_keymap().map(&|motion| {
+                    mapping(move |v, b, vim, _| {
+                        b.apply_buffer_op(&v.vp, BufferOp::Delete(motion));
+                        vim.switch_mode(VimMode::Insert);
+                    })
+                })),
+            ),
+        ),
     ])))
 }
 
@@ -182,24 +203,24 @@ fn insert_mode_keymap() -> Keymap<MappedFn> {
             (
                 key("Backspace"),
                 leaf("backspace", |v, b, _, _| {
-                    b.apply_buffer_op(&v.vp, BufferOp::Delete(Trajectory::Backwards))
+                    b.apply_buffer_op(&v.vp, BufferOp::Delete(Motion::Left))
                 }),
             ),
             (
                 key("Delete"),
-                leaf("backspace", |v, b, _, _| {
-                    b.apply_buffer_op(&v.vp, BufferOp::Delete(Trajectory::Forwards))
+                leaf("delete", |v, b, _, _| {
+                    b.apply_buffer_op(&v.vp, BufferOp::Delete(Motion::Right))
                 }),
             ),
             (
                 key("Enter"),
-                leaf("backspace", |v, b, _, _| {
+                leaf("", |v, b, _, _| {
                     b.apply_buffer_op(&v.vp, BufferOp::Insert("\n".to_string()))
                 }),
             ),
             (
                 key("Tab"),
-                leaf("backspace", |v, b, _, _| {
+                leaf("", |v, b, _, _| {
                     b.apply_buffer_op(&v.vp, BufferOp::Insert("\t".to_string()))
                 }),
             ),
@@ -273,6 +294,13 @@ fn normal_mode_movement_key_motion_keymap() -> Keymap<Motion<'static>> {
             KeymapNode::Leaf(
                 "to previous word".to_string(),
                 Motion::PrevWordBoundary(WordBoundaryType::Start),
+            ),
+        ),
+        (
+            key("e"),
+            KeymapNode::Leaf(
+                "to end of word".to_string(),
+                Motion::NextWordBoundary(WordBoundaryType::End),
             ),
         ),
         (key("h"), KeymapNode::Leaf("left".to_string(), Motion::Left)),
