@@ -1,9 +1,13 @@
+//! Key combo definitions as they are used in specifying keymaps.
+
 use std::str::FromStr;
 
 use itertools::Itertools;
 
 use crate::input_event::{Key, KeyInput, Modifier, RawKey};
 
+/// Specification of a keypress, either through raw key codes or through key attribute value,
+/// designed for use in keymaps
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum KeySpec {
     /// Key specified as a raw key code (<https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values>)
@@ -21,6 +25,11 @@ impl std::fmt::Display for KeySpec {
     }
 }
 
+/// Specification of a combination of a key and 0 or more modifiers that where held down.
+///
+/// This differs from [KeyInput] in that it is specified via _either_ a raw key code,
+/// _or_ a key attribute value, whereas [KeyInput] provides both.
+/// Thus, several [Combo]s may match the same [KeyInput]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Combo {
     spec: KeySpec,
@@ -37,6 +46,7 @@ impl From<KeySpec> for Combo {
 }
 
 impl Combo {
+    /// Check if a Combo matches a given key-input
     pub fn matches(&self, key_input: &KeyInput) -> bool {
         let key_matches = match &self.spec {
             KeySpec::Raw(x) => *x == key_input.code,
@@ -45,12 +55,15 @@ impl Combo {
         key_matches && self.modifiers == key_input.modifiers
     }
 
+    /// Turn a [KeyInput] into a corresponding [Combo] by looking at the raw key code
     pub fn from_keyinput_raw(input: KeyInput) -> Self {
         Self {
             modifiers: input.modifiers,
             spec: KeySpec::Raw(input.code),
         }
     }
+
+    /// Turn a [KeyInput] into a corresponding [Combo] by looking at the key attribute value
     pub fn from_keyinput_str(input: KeyInput) -> Self {
         Self {
             modifiers: input.modifiers,
@@ -59,16 +72,6 @@ impl Combo {
     }
 }
 
-impl std::ops::Add<Modifier> for RawKey {
-    type Output = Combo;
-
-    fn add(self, rhs: Modifier) -> Self::Output {
-        Combo {
-            spec: KeySpec::Raw(self),
-            modifiers: vec![rhs],
-        }
-    }
-}
 impl std::ops::Add<Modifier> for Combo {
     type Output = Combo;
 
