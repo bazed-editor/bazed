@@ -263,31 +263,4 @@ export type KeyInput = {
 }
 
 export type Modifier = "ctrl" | "alt" | "shift" | "win"
-export type Key = { char: string } | NonCharKey
-export type NonCharKey =
-  | "f1"
-  | "f2"
-  | "f3"
-  | "f4"
-  | "f5"
-  | "f6"
-  | "f7"
-  | "f8"
-  | "f9"
-  | "f10"
-  | "f11"
-  | "f12"
-  | "backspace"
-  | "return"
-  | "tab"
-  | "home"
-  | "end"
-  | "insert"
-  | "delete"
-  | "page_up"
-  | "page_down"
-  | "escape"
-  | "left"
-  | "right"
-  | "up"
-  | "down"
+export type Key = string

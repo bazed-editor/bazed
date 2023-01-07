@@ -16,8 +16,9 @@ pub mod input_event;
 pub mod keymap;
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub struct KeymapId(String);
+pub struct KeymapId(pub String);
 
+#[derive(Debug)]
 pub struct InputMapper<V> {
     keymaps: HashMap<KeymapId, Keymap<V>>,
     /// The stack of currently active keymaps. Newly activated maps get pushed to the top.
@@ -30,10 +31,18 @@ pub struct InputMapper<V> {
 }
 
 impl<V> InputMapper<V> {
+    pub fn from_base_keymap(keymap_id: KeymapId, keymap: Keymap<V>) -> Self {
+        Self {
+            keymaps: HashMap::from_iter([(keymap_id.clone(), keymap)]),
+            stack: nonempty::nonempty![keymap_id],
+            buffered_inputs: Vec::new(),
+        }
+    }
     pub fn register_keymap(&mut self, keymap_id: KeymapId, keymap: Keymap<V>) {
         self.keymaps.insert(keymap_id, keymap);
     }
 
+    /// Activate a keymap. fails when no keymap with that id is registered
     pub fn push_keymap(&mut self, keymap_id: KeymapId) -> Result<(), Error> {
         if !self.keymaps.contains_key(&keymap_id) {
             return Err(Error::KeymapNotRegistered(keymap_id));
@@ -45,6 +54,21 @@ impl<V> InputMapper<V> {
         }
         self.stack.push(keymap_id);
         Ok(())
+    }
+
+    /// Deactivate the top-most occurrence of the given keymap.
+    /// NOTE that this will never deactivate the base map.
+    pub fn deactivate_keymap(&mut self, keymap_id: KeymapId) {
+        let last_entry = self
+            .stack
+            .tail
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, x)| x == &&keymap_id);
+        if let Some((idx, _)) = last_entry {
+            self.stack.tail.remove(idx);
+        }
     }
 
     /// Handle a single key input.

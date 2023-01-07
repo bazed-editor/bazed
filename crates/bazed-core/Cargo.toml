@@ -18,6 +18,7 @@ color-eyre.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
 bazed-rpc.workspace = true
+bazed-input-mapper.workspace = true
 tokio.workspace = true
 futures.workspace = true
 tracing.workspace = true

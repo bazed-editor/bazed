@@ -115,6 +115,7 @@ dependencies = [
 name = "bazed-core"
 version = "0.0.0"
 dependencies = [
+ "bazed-input-mapper",
  "bazed-rpc",
  "color-eyre",
  "derive_more",
@@ -149,6 +150,7 @@ dependencies = [
 name = "bazed-rpc"
 version = "0.0.0"
 dependencies = [
+ "bazed-input-mapper",
  "color-eyre",
  "futures",
  "serde",
