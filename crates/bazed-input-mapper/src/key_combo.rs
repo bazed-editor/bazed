@@ -2,9 +2,7 @@
 
 use std::str::FromStr;
 
-use itertools::Itertools;
-
-use crate::input_event::{Key, KeyInput, Modifier, RawKey};
+use crate::input_event::{Key, KeyInput, Modifiers, RawKey};
 
 /// Specification of a keypress, either through raw key codes or through key attribute value,
 /// designed for use in keymaps
@@ -33,14 +31,14 @@ impl std::fmt::Display for KeySpec {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Combo {
     spec: KeySpec,
-    modifiers: Vec<Modifier>,
+    modifiers: Modifiers,
 }
 
 impl From<KeySpec> for Combo {
     fn from(spec: KeySpec) -> Self {
         Combo {
             spec,
-            modifiers: Vec::new(),
+            modifiers: Modifiers::empty(),
         }
     }
 }
@@ -48,11 +46,10 @@ impl From<KeySpec> for Combo {
 impl Combo {
     /// Check if a Combo matches a given key-input
     pub fn matches(&self, key_input: &KeyInput) -> bool {
-        let key_matches = match &self.spec {
-            KeySpec::Raw(x) => *x == key_input.code,
-            KeySpec::Str(x) => *x == key_input.key,
-        };
-        key_matches && self.modifiers == key_input.modifiers
+        match &self.spec {
+            KeySpec::Raw(x) => *x == key_input.code && self.modifiers == key_input.modifiers,
+            KeySpec::Str(x) => *x == key_input.key && key_input.modifiers.contains(self.modifiers),
+        }
     }
 
     /// Turn a [KeyInput] into a corresponding [Combo] by looking at the raw key code
@@ -70,13 +67,9 @@ impl Combo {
             spec: KeySpec::Str(input.key),
         }
     }
-}
 
-impl std::ops::Add<Modifier> for Combo {
-    type Output = Combo;
-
-    fn add(mut self, rhs: Modifier) -> Self::Output {
-        self.modifiers.push(rhs);
+    pub fn with_mods(mut self, mods: Modifiers) -> Self {
+        self.modifiers = mods;
         self
     }
 }
@@ -84,7 +77,7 @@ impl std::ops::Add<Modifier> for Combo {
 impl From<Key> for Combo {
     fn from(key: Key) -> Self {
         Self {
-            modifiers: Vec::new(),
+            modifiers: Modifiers::empty(),
             spec: KeySpec::Str(key),
         }
     }
@@ -93,7 +86,7 @@ impl From<Key> for Combo {
 impl From<RawKey> for Combo {
     fn from(key: RawKey) -> Self {
         Self {
-            modifiers: Vec::new(),
+            modifiers: Modifiers::empty(),
             spec: KeySpec::Raw(key),
         }
     }
@@ -104,7 +97,7 @@ impl std::fmt::Display for Combo {
         if self.modifiers.is_empty() {
             write!(f, "{}", self.spec)
         } else {
-            write!(f, "<{}-{}>", self.modifiers.iter().join("-"), self.spec)
+            write!(f, "<{}-{}>", self.modifiers, self.spec)
         }
     }
 }
@@ -116,10 +109,14 @@ impl FromStr for Combo {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Some(s) = s.strip_prefix('<').and_then(|s| s.strip_suffix('>')) {
             let mut parts = s.split('-').peekable();
-            let mut modifiers = Vec::new();
+            let mut modifiers = Modifiers::empty();
             while let Some(part) = parts.next() {
                 if parts.peek().is_some() {
-                    modifiers.push(part.parse()?);
+                    modifiers |= part
+                        .chars()
+                        .next()
+                        .and_then(Modifiers::from_char)
+                        .ok_or_else(|| KeyInputParseError::InvalidModifier(part.to_string()))?;
                 } else {
                     return Ok(Self {
                         modifiers,
@@ -130,7 +127,7 @@ impl FromStr for Combo {
             Err(KeyInputParseError::EmptyInput)
         } else {
             Ok(Self {
-                modifiers: Vec::new(),
+                modifiers: Modifiers::empty(),
                 spec: KeySpec::Str(Key(s.to_string())),
             })
         }
@@ -148,7 +145,7 @@ pub enum KeyInputParseError {
 #[cfg(test)]
 mod test {
     use crate::{
-        input_event::{Key, Modifier},
+        input_event::{Key, Modifiers},
         key_combo::{Combo, KeySpec},
     };
 
@@ -162,22 +159,25 @@ mod test {
             modifiers,
             spec: KeySpec::Raw(key.into()),
         };
-        assert_eq!(str_combo(vec![], "Backspace"), "Backspace".parse().unwrap());
         assert_eq!(
-            raw_combo(vec![], "Backspace"),
+            str_combo(Modifiers::empty(), "Backspace"),
+            "Backspace".parse().unwrap()
+        );
+        assert_eq!(
+            raw_combo(Modifiers::empty(), "Backspace"),
             "<Backspace>".parse().unwrap(),
         );
         assert_eq!(
-            raw_combo(vec![Modifier::Ctrl], "Backspace"),
+            raw_combo(Modifiers::CTRL, "Backspace"),
             "<C-Backspace>".parse().unwrap(),
         );
         assert_eq!(
             raw_combo(
-                vec![Modifier::Ctrl, Modifier::Shift, Modifier::Alt],
+                Modifiers::CTRL | Modifiers::SHIFT | Modifiers::ALT,
                 "Backspace"
             ),
             "<C-S-A-Backspace>".parse().unwrap(),
         );
-        assert_eq!(raw_combo(vec![], "C"), "<C>".parse().unwrap());
+        assert_eq!(raw_combo(Modifiers::empty(), "C"), "<C>".parse().unwrap());
     }
 }

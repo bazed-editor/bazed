@@ -1,11 +1,18 @@
-import type { KeyInput, Modifier } from "./rpc"
+import type { KeyInput, Modifiers } from "./rpc"
 
-export const getModifiers = (event: WheelEvent | KeyboardEvent): Modifier[] => {
-  const modifiers: Modifier[] = []
-  if (event.ctrlKey) modifiers.push("ctrl")
-  if (event.shiftKey) modifiers.push("shift")
-  if (event.altKey) modifiers.push("alt")
-  if (event.metaKey) modifiers.push("win")
+const ModifierBits = {
+  CTRL: 0b00000001,
+  SHIFT: 0b00000010,
+  ALT: 0b00000100,
+  WIN: 0b00001000,
+}
+
+export const getModifiers = (event: WheelEvent | KeyboardEvent): Modifiers => {
+  let modifiers: Modifiers = 0
+  if (event.ctrlKey) modifiers |= ModifierBits.CTRL
+  if (event.shiftKey) modifiers |= ModifierBits.SHIFT
+  if (event.altKey) modifiers |= ModifierBits.ALT
+  if (event.metaKey) modifiers |= ModifierBits.WIN
   return modifiers
 }
 

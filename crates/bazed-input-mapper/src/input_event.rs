@@ -1,11 +1,6 @@
 //! Input events, as they are received from a frontend.
 
-use std::str::FromStr;
-
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-
-use crate::key_combo::KeyInputParseError;
 
 /// A combination of held [Modifier]s and a [Key].
 // TODO figure out normalization: Do we get `Shift+a` or do we get `Key::Char('A')`?
@@ -13,9 +8,10 @@ use crate::key_combo::KeyInputParseError;
 #[serde(rename_all = "snake_case")]
 pub struct KeyInput {
     /// Modifiers held down in this event.
-    /// TODO make this some sort of set
-    pub modifiers: Vec<Modifier>,
+    pub modifiers: Modifiers,
+    /// The key that was pressed (see [Key])
     pub key: Key,
+    /// Raw key code of the pressed key (see [RawKey])
     pub code: RawKey,
 }
 
@@ -24,35 +20,82 @@ impl std::fmt::Display for KeyInput {
         if self.modifiers.is_empty() {
             write!(f, "{}", self.key)
         } else {
-            write!(f, "<{}-{}>", self.modifiers.iter().join("-"), self.code)
+            write!(f, "<{}-{}>", self.modifiers, self.code)
         }
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, Serialize, Deserialize, derive_more::Display)]
-#[serde(rename_all = "snake_case")]
-pub enum Modifier {
-    #[display(fmt = "C")]
-    Ctrl,
-    #[display(fmt = "A")]
-    Alt,
-    #[display(fmt = "S")]
-    Shift,
-    #[display(fmt = "M")]
-    Win,
+bitflags::bitflags! {
+    /// Set of held modifiers
+    #[derive(Serialize, Deserialize)]
+    #[serde(transparent)]
+    pub struct Modifiers: u8 {
+        const CTRL = 0b00000001;
+        const SHIFT = 0b00000010;
+        const ALT = 0b00000100;
+        const WIN = 0b00001000;
+    }
 }
 
-impl FromStr for Modifier {
-    type Err = KeyInputParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+impl Modifiers {
+    /// Parse a char into a single modifier
+    pub fn from_char(c: char) -> Option<Modifiers> {
         match () {
-            _ if s.eq_ignore_ascii_case("c") => Ok(Self::Ctrl),
-            _ if s.eq_ignore_ascii_case("s") => Ok(Self::Shift),
-            _ if s.eq_ignore_ascii_case("m") => Ok(Self::Win),
-            _ if s.eq_ignore_ascii_case("a") => Ok(Self::Alt),
-            _ => Err(KeyInputParseError::InvalidModifier(s.to_string())),
+            _ if c.eq_ignore_ascii_case(&'c') => Some(Modifiers::CTRL),
+            _ if c.eq_ignore_ascii_case(&'s') => Some(Modifiers::SHIFT),
+            _ if c.eq_ignore_ascii_case(&'a') => Some(Modifiers::ALT),
+            _ if c.eq_ignore_ascii_case(&'m') => Some(Modifiers::WIN),
+            _ => None,
         }
+    }
+}
+
+impl IntoIterator for Modifiers {
+    type Item = Self;
+
+    type IntoIter = std::vec::IntoIter<Self>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let mut x = Vec::new();
+        if self.contains(Modifiers::CTRL) {
+            x.push(Modifiers::CTRL)
+        }
+        if self.contains(Modifiers::SHIFT) {
+            x.push(Modifiers::SHIFT)
+        }
+        if self.contains(Modifiers::ALT) {
+            x.push(Modifiers::ALT)
+        }
+        if self.contains(Modifiers::WIN) {
+            x.push(Modifiers::WIN)
+        }
+        x.into_iter()
+    }
+}
+
+impl std::fmt::Display for Modifiers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut first = true;
+        let mut helper = move |c: char| {
+            if !first {
+                write!(f, "-")?;
+            }
+            first = false;
+            write!(f, "{}", c)
+        };
+        if self.contains(Modifiers::CTRL) {
+            helper('C')?;
+        }
+        if self.contains(Modifiers::SHIFT) {
+            helper('S')?;
+        }
+        if self.contains(Modifiers::ALT) {
+            helper('A')?;
+        }
+        if self.contains(Modifiers::WIN) {
+            helper('W')?;
+        }
+        Ok(())
     }
 }
 
@@ -60,7 +103,7 @@ impl FromStr for Modifier {
 /// that being either a [key string](https://www.w3.org/TR/uievents-key/#key-string) or
 /// a [named key attribute value](https://www.w3.org/TR/uievents-key/#named-key-attribute-value)
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Serialize, Deserialize, derive_more::Display)]
-#[serde(rename_all = "snake_case")]
+#[serde(transparent)]
 pub struct Key(pub String);
 
 impl Key {
@@ -108,7 +151,7 @@ impl Key {
 
 /// Raw key value according to <https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values>
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Serialize, Deserialize, derive_more::Display)]
-#[serde(rename_all = "snake_case")]
+#[serde(transparent)]
 pub struct RawKey(pub String);
 
 impl RawKey {
