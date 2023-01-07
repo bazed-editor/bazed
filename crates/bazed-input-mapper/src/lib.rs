@@ -16,11 +16,21 @@ pub mod input_event;
 pub mod key_combo;
 pub mod keymap;
 
+/// Id of a keymap.
+///
+/// Represented by a string for now, but this will probably be changed to use some namespacing mechanism
+/// and _then_ a proper name in the future
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct KeymapId(pub String);
 
+/// The input mapper.
+///
+/// Keymaps have to be explicitly registered by ID first, and can then be activated later.
+/// When a key input is received, the stack of active keymaps is traversed
+/// until a match is found
 #[derive(Debug)]
 pub struct InputMapper<V> {
+    /// Map of all registered keymaps.
     keymaps: HashMap<KeymapId, Keymap<V>>,
     /// The stack of currently active keymaps. Newly activated maps get pushed to the top.
     /// Key inputs get checked against the stack top to bottom, until a match is found.
@@ -28,6 +38,8 @@ pub struct InputMapper<V> {
     /// Invariant: KeymapIds always map to entries in `keymaps`
     stack: NonEmpty<KeymapId>,
 
+    /// Input currently buffered. When the last pressed key mapped to some submap,
+    /// that key will be buffered, such that further lookups can be done when the next input is received.
     buffered_inputs: Vec<KeyInput>,
 }
 
@@ -58,7 +70,7 @@ impl<V> InputMapper<V> {
     }
 
     /// Deactivate the top-most occurrence of the given keymap.
-    /// NOTE that this will never deactivate the base map.
+    /// **NOTE** that this will never deactivate the base map.
     pub fn deactivate_keymap(&mut self, keymap_id: KeymapId) {
         let last_entry = self
             .stack
