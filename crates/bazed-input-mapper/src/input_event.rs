@@ -1,3 +1,5 @@
+//! Input events, as they are received from a frontend.
+
 use std::str::FromStr;
 
 use itertools::Itertools;
