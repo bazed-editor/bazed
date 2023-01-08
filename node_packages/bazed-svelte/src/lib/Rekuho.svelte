@@ -1,19 +1,22 @@
 <!--
+  @component
   # Rekuho
-  ## the antipode of monaco
 
-  This component displays an editor.
+  Antipode of monaco.
+
+  Component displaying an editor.
 
     @param {Config} config - front-end configuration
     @param {string[]} lines - lines to display of the buffer, starting from firstLine
     @param {number} firstLine - offset at which to render the current buffer
     @param {CaretPosition[]} carets - cursor positions
 
-    @event {Resize} resize - the editor has been resized by more than a line, fill the view with lines
-    @event {KeyInput} keyinput - a key was pressed
-    @event {CaretPosition} mousedown - click position, by line and column
-    @event {MouseWheel} mousewheel - scrolled up or down
+    @fires Resize#resize - the editor has been resized by more than a line, fill the view with lines
+    @fires KeyInput#keyinput - a key was pressed
+    @fires CaretPosition#mousedown - click position, by line and column
+    @fires MouseWheel#mousewheel - scrolled up or down
 -->
+
 <script lang="ts">
   import { onMount, createEventDispatcher } from "svelte"
 
