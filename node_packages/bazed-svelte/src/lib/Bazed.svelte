@@ -1,7 +1,8 @@
 <!--
+  @component
   # Bazed
 
-  "Just call it an editor. Anything else would be confusing for the forseeable future." - Elkowar
+  > Just call it an editor. Anything else would be confusing for the forseeable future." - Elkowar
 -->
 <script lang="ts">
   import { example as configExample } from "./config"
