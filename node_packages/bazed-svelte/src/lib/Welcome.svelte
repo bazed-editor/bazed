@@ -1,4 +1,5 @@
 <!--
+  @component
   # Welcome
   ---
   Placeholder, currently displayed during session establishment. May be replaced with a "local"
