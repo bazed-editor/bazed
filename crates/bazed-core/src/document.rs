@@ -5,13 +5,13 @@ use std::{
     path::PathBuf,
 };
 
-use bazed_rpc::core_proto::{CaretPosition, ToFrontend};
+use bazed_rpc::core_proto::{CaretPosition, ToFrontend, ViewData};
 use uuid::Uuid;
 use xi_rope::Rope;
 
 use crate::{
     buffer::Buffer,
-    view::{View, ViewId},
+    view::{View, ViewId, Viewport},
     vim_interface::VimMode,
 };
 
@@ -59,6 +59,24 @@ impl Document {
         Ok(())
     }
 
+    pub fn lines_in_viewport(&self, vp: &Viewport) -> Vec<String> {
+        self.buffer
+            .lines_between(vp.first_line, vp.last_line())
+            .into_iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>()
+    }
+
+    pub fn caret_positions(&self) -> Vec<CaretPosition> {
+        self.buffer
+            .all_caret_positions()
+            .map(|x| CaretPosition {
+                line: x.line,
+                col: x.col,
+            })
+            .into()
+    }
+
     /// Create a notification for the frontend, that contains all relevant state of this document.
     ///
     /// *Note:* This will later be replaced with a proper
@@ -71,27 +89,14 @@ impl Document {
         view: &View,
         vim_mode: VimMode,
     ) -> ToFrontend {
-        let lines = self
-            .buffer
-            .lines_between(view.vp.first_line, view.vp.last_line())
-            .into_iter()
-            .map(|x| x.to_string())
-            .collect::<Vec<_>>();
-
         ToFrontend::UpdateView {
             view_id: view_id.into(),
-            first_line: view.vp.first_line,
-            height: view.vp.height,
-            text: lines,
-            vim_mode: vim_mode.to_string(),
-            carets: self
-                .buffer
-                .all_caret_positions()
-                .map(|x| CaretPosition {
-                    line: x.line,
-                    col: x.col,
-                })
-                .into(),
+            view_data: ViewData {
+                first_line: view.vp.first_line,
+                text: self.lines_in_viewport(&view.vp),
+                vim_mode: vim_mode.to_string(),
+                carets: self.caret_positions(),
+            },
         }
     }
 }

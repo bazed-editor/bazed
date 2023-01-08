@@ -18,37 +18,32 @@ pub struct CaretPosition {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ViewData {
+    pub first_line: usize,
+    pub text: Vec<String>,
+    /// caret positions are absolute
+    pub carets: Vec<CaretPosition>,
+    pub vim_mode: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "method", content = "params")]
 pub enum ToFrontend {
-    OpenDocument {
-        document_id: Uuid,
+    /// Sent when a new view should be opened.
+    OpenView {
+        view_id: Uuid,
         path: Option<PathBuf>,
-        text: String,
+        view_data: ViewData,
     },
     /// Sent whenever anything in the view changed, i.e. the content,
     /// the viewport, or a caret position
-    UpdateView {
-        view_id: Uuid,
-        first_line: usize,
-        height: usize,
-        text: Vec<String>,
-        /// caret positions are absolute
-        carets: Vec<CaretPosition>,
-        vim_mode: String,
-    },
-    /// Response to the [ToBackend::ViewOpened] request
-    ViewOpenedResponse {
-        request_id: RequestId,
-        view_id: Uuid,
-    },
+    UpdateView { view_id: Uuid, view_data: ViewData },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "method", content = "params")]
 pub enum ToBackend {
-    SaveDocument {
-        document_id: Uuid,
-    },
     KeyPressed {
         view_id: Uuid,
         input: KeyInput,
@@ -69,11 +64,6 @@ pub enum ToBackend {
     /// i.e. because the window was resized or the user scrolled.
     ViewportChanged {
         view_id: Uuid,
-        height: usize,
-    },
-    ViewOpened {
-        request_id: RequestId,
-        document_id: Uuid,
         height: usize,
     },
 }

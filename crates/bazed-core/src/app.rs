@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use bazed_input_mapper::input_event::KeyInput;
 use bazed_rpc::{
     core_proto::ToBackend,
-    core_proto::{CaretPosition, ToFrontend},
+    core_proto::{CaretPosition, ToFrontend, ViewData},
     server::ClientSendHandle,
 };
 use color_eyre::Result;
@@ -45,15 +45,23 @@ impl App {
     }
 
     async fn open_document(&mut self, document: Document) -> Result<()> {
-        let id = DocumentId::gen();
+        let document_id = DocumentId::gen();
+        let view_id = ViewId::gen();
+        let view = View::new(document_id, Viewport::new(0, 20));
         self.event_send
-            .send_rpc(ToFrontend::OpenDocument {
-                document_id: id.0,
+            .send_rpc(ToFrontend::OpenView {
+                view_id: view_id.0,
                 path: document.path.clone(),
-                text: document.buffer.content_to_string(),
+                view_data: ViewData {
+                    first_line: view.vp.first_line,
+                    text: document.lines_in_viewport(&view.vp),
+                    carets: document.caret_positions(),
+                    vim_mode: self.vim_interface.mode.to_string(),
+                },
             })
             .await?;
-        self.documents.insert(id, document);
+        self.documents.insert(document_id, document);
+        self.views.insert(view_id, view);
         Ok(())
     }
 
@@ -74,55 +82,25 @@ impl App {
         tracing::info!(call = ?call, "Handling rpc call");
         match call {
             ToBackend::KeyPressed { view_id, input } => {
-                self.handle_key_pressed(ViewId::from_uuid(view_id), input)
-                    .await?
+                self.handle_key_pressed(ViewId(view_id), input).await?
             },
 
             ToBackend::MouseInput { view_id, position } => {
-                self.handle_mouse_input(ViewId::from_uuid(view_id), position)
-                    .await?
+                self.handle_mouse_input(ViewId(view_id), position).await?
             },
             ToBackend::MouseScroll {
                 view_id,
                 line_delta,
             } => {
-                self.handle_mouse_scroll(ViewId::from_uuid(view_id), line_delta)
+                self.handle_mouse_scroll(ViewId(view_id), line_delta)
                     .await?
             },
-
             ToBackend::ViewportChanged { view_id, height } => {
-                self.handle_viewport_changed(ViewId::from_uuid(view_id), height)
-                    .await?;
-            },
-            ToBackend::ViewOpened {
-                request_id,
-                document_id,
-                height,
-            } => {
-                let view_id = self
-                    .handle_view_opened(DocumentId::from_uuid(document_id), height)
-                    .await?;
-                self.event_send
-                    .send_rpc(ToFrontend::ViewOpenedResponse {
-                        request_id,
-                        view_id: view_id.into(),
-                    })
-                    .await?;
-            },
-            ToBackend::SaveDocument { document_id } => {
-                self.handle_save_document(DocumentId::from_uuid(document_id))
+                self.handle_viewport_changed(ViewId(view_id), height)
                     .await?;
             },
         }
         Ok(())
-    }
-
-    async fn handle_save_document(&mut self, document_id: DocumentId) -> Result<()> {
-        let document = self
-            .documents
-            .get_mut(&document_id)
-            .ok_or(Error::InvalidDocumentId(document_id))?;
-        Ok(document.write_to_file().await?)
     }
 
     async fn handle_viewport_changed(&mut self, view_id: ViewId, height: usize) -> Result<()> {
@@ -217,20 +195,6 @@ impl App {
         Ok(())
     }
 
-    async fn handle_view_opened(
-        &mut self,
-        document_id: DocumentId,
-        height: usize,
-    ) -> Result<ViewId> {
-        if !self.documents.contains_key(&document_id) {
-            return Err(Error::InvalidDocumentId(document_id).into());
-        }
-        let view = View::new(document_id, Viewport::new(0, height));
-        let id = ViewId::gen();
-        self.views.insert(id, view);
-        Ok(id)
-    }
-
     pub fn views(&self) -> &HashMap<ViewId, View> {
         &self.views
     }
@@ -256,16 +220,14 @@ pub async fn start(addr: &str, path: Option<std::path::PathBuf>) -> Result<()> {
 
     Ok(())
 }
-
 #[cfg(test)]
 mod tests {
     use bazed_input_mapper::input_event::{Key, KeyInput, Modifiers, RawKey};
     use bazed_rpc::{
-        core_proto::{RequestId, ToBackend, ToFrontend},
+        core_proto::{ToBackend, ToFrontend},
         server::ClientSendHandle,
     };
     use futures::channel::mpsc::unbounded;
-    use uuid::Uuid;
 
     use super::App;
     use crate::test_util;
@@ -288,18 +250,9 @@ mod tests {
         let (to_frontend_send, mut to_frontend_recv) = unbounded::<ToFrontend>();
         let mut app = App::new(ClientSendHandle(to_frontend_send));
 
-        // app_open_ephemeral should trigger an OpenDocument response
+        // app_open_ephemeral should trigger a OpenView message
         app.open_ephemeral().await?;
-        let document_id = expect_msg!("OpenDocument", to_frontend_recv, ToFrontend::OpenDocument { document_id, ..} => document_id);
-
-        // ViewOpened should trigger a ViewOpenedResponse response
-        app.handle_rpc_call(ToBackend::ViewOpened {
-            request_id: RequestId(Uuid::new_v4()),
-            document_id,
-            height: 10,
-        })
-        .await?;
-        let view_id = expect_msg!("ViewOpenedResponse", to_frontend_recv, ToFrontend::ViewOpenedResponse { view_id, .. } => view_id);
+        let view_id = expect_msg!("OpenDocument", to_frontend_recv, ToFrontend::OpenView { view_id, ..} => view_id);
 
         Ok((app, to_frontend_recv, view_id))
     }
@@ -317,7 +270,7 @@ mod tests {
         // Expanding the Viewport should trigger an UpdateView response
         app.handle_rpc_call(ToBackend::ViewportChanged {
             view_id,
-            height: 15,
+            height: 150,
         })
         .await?;
         expect_msg!("UpdateView", to_frontend_recv, ToFrontend::UpdateView { .. } => {});
