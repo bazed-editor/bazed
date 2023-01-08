@@ -3,12 +3,9 @@ use uuid::Uuid;
 use crate::document::DocumentId;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash, derive_more::Display, derive_more::Into)]
-pub struct ViewId(Uuid);
+pub struct ViewId(pub Uuid);
 
 impl ViewId {
-    pub(crate) fn from_uuid(uuid: Uuid) -> Self {
-        Self(uuid)
-    }
     pub(crate) fn gen() -> Self {
         Self(Uuid::new_v4())
     }

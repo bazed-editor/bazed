@@ -1,7 +1,6 @@
-import { v4 as generateUuid } from "uuid"
 import { ensureExhaustive } from "./common"
-import { state, type CaretPosition, type State, type ViewState } from "./core"
 import * as log from "./log"
+import { state, type CaretPosition, type State, type Uuid } from "./core"
 
 export const initSession = async (attempts?: number): Promise<Session> => {
   const websocket = new WebSocket("ws://localhost:6969")
@@ -18,12 +17,10 @@ export const initSession = async (attempts?: number): Promise<Session> => {
 export class Session {
   websocket: WebSocket
   state: State = {} as any
-  requests: { [id: string]: (response: ToFrontend) => void }
 
   constructor(websocket: WebSocket) {
     websocket.onmessage = (event) => this.onMessageReceived(JSON.parse(event.data))
     this.websocket = websocket
-    this.requests = {}
     state.subscribe((state) => {
       this.state = state
     })
@@ -80,89 +77,48 @@ export class Session {
   async onMessageReceived(message: ToFrontend) {
     log.info("Message received via websocket:", message)
     switch (message.method) {
-      case "open_document":
-        this.onOpenDocument(message.params)
+      case "open_view":
+        this.onOpenView(message.params)
         break
       case "update_view":
         this.onUpdateView(message.params)
-        break
-      case "view_opened_response":
-        this.requests[message.params.request_id](message)
-        delete this.requests[message.params.request_id]
         break
       default:
         ensureExhaustive(message)
     }
   }
 
-  async requestDocumentView(document_id: string): Promise<ViewOpenedResponse> {
-    const request_id = generateUuid()
-
-    const message: ViewOpened = {
-      method: "view_opened",
-      params: {
-        document_id,
-        request_id,
-        height: 200,
-        width: 40,
-      },
-    }
-
-    this.send(message)
-    return new Promise((resolve) => (this.requests[request_id] = resolve as any))
-  }
-
   /** expected behavior is for the frontend to update the viewed document */
-  async onOpenDocument(params: OpenDocument["params"]) {
-    const document: { path: string | null } = { path: params.path }
-
-    state.update((state) => ({
-      views: state.views,
-      documents: {
-        ...state.documents,
-        [params.document_id]: document,
-      },
-    }))
-
-    let viewOpenResponse = await this.requestDocumentView(params.document_id)
-    this.onViewOpenedResponse(params.document_id, viewOpenResponse.params)
-  }
-
-  /** expected behavior is for a new view to be opened */
-  async onViewOpenedResponse(document_id: string, params: ViewOpenedResponse["params"]) {
-    const normal: ViewState = {
-      document: document_id,
-      lines: [],
-      firstLine: 0,
-      height: 20,
-      carets: [],
-    }
-
-    state.update((state) => ({
-      documents: state.documents,
-      views: {
-        ...state.views,
-        [params.view_id]: normal,
-      },
-    }))
+  async onOpenView(params: OpenView["params"]) {
+    state.update((state) => {
+      state.views[params.view_id] = {
+        filePath: params.path,
+        firstLine: params.view_data.first_line,
+        lines: params.view_data.text,
+        carets: params.view_data.carets,
+      }
+      return state
+    })
   }
 
   /** expected behavior is for the frontend to update the view */
   async onUpdateView(params: UpdateView["params"]) {
     state.update((state) => {
-      state.views[params.view_id] = {
-        ...state.views[params.view_id],
-        firstLine: params.first_line,
-        lines: params.text,
-        carets: params.carets,
+      let old = state.views[params.view_id]
+      if (!old) {
+        console.error("Got UpdateView for unknown view id, ignoring...")
+      } else {
+        state.views[params.view_id] = {
+          ...old,
+          firstLine: params.view_data.first_line,
+          lines: params.view_data.text,
+          carets: params.view_data.carets,
+        }
       }
       return state
     })
   }
 }
-
-type Uuid = string
-type RequestId = string
 
 type Position = {
   line: number
@@ -174,16 +130,22 @@ type Message<Method extends string, Params> = {
   params: Params
 }
 
-type ToFrontend = OpenDocument | UpdateView | ViewOpenedResponse
+type ToFrontend = OpenView | UpdateView
 
-type ToBackend = ViewOpened | ViewportChanged | KeyPressed | SaveDocument | MouseInput | MouseScroll
+type ToBackend = ViewportChanged | KeyPressed | MouseInput | MouseScroll
+type ViewData = {
+  first_line: number
+  text: string[]
+  carets: CaretPosition[]
+  vim_mode: string
+}
 
-type OpenDocument = Message<
-  "open_document",
+type OpenView = Message<
+  "open_view",
   {
-    document_id: Uuid
+    view_id: Uuid
     path: string | null
-    text: string
+    view_data: ViewData
   }
 >
 
@@ -191,27 +153,7 @@ type UpdateView = Message<
   "update_view",
   {
     view_id: Uuid
-    first_line: number
-    text: string[]
-    carets: Position[]
-  }
->
-
-type ViewOpenedResponse = Message<
-  "view_opened_response",
-  {
-    request_id: RequestId
-    view_id: Uuid
-  }
->
-
-type ViewOpened = Message<
-  "view_opened",
-  {
-    request_id: RequestId
-    document_id: Uuid
-    height: number
-    width: number
+    view_data: ViewData
   }
 >
 
@@ -232,14 +174,6 @@ type KeyPressed = Message<
   }
 >
 
-type SaveDocument = Message<
-  "save_document",
-  {
-    document_id: Uuid
-  }
->
-
-// backend unimplemented
 type MouseInput = Message<
   "mouse_input",
   {
