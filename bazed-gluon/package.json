@@ -1,6 +1,0 @@
-{
-  "type": "module",
-  "dependencies": {
-    "@gluon-framework/gluon": "^0.10.1"
-  }
-}
