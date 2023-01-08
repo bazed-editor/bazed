@@ -7,7 +7,7 @@
     "format": "prettier --plugin-search-dir . --write ."
   },
   "dependencies": {
-    "@gluon-framework/gluon": "^0.10.1"
+    "@gluon-framework/gluon": "^0.11.0"
   },
   "devDependencies": {
     "prettier": "^2.8.0"
