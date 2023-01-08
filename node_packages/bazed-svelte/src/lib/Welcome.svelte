@@ -1,3 +1,13 @@
+<!--
+  # Welcome
+  ---
+  Placeholder, currently displayed during session establishment. May be replaced with a "local"
+  terminal or something allowing the user to attempt opening a document in pretense.
+
+  TODO: implement window lacking session
+
+    @param {SvelteComponent} slot - component to be displayed at the bottom of the window
+-->
 <div class="container">
   <div class="logo">BAZED</div>
   <slot />
