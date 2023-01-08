@@ -1,5 +1,5 @@
 <script>
-  import Rekuho from "../lib/Rekuho.svelte"
+  import Bazed from "../lib/Bazed.svelte"
 </script>
 
-<Rekuho />
+<Bazed />
