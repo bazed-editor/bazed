@@ -1,6 +1,7 @@
 import { v4 as generateUuid } from "uuid"
 import { ensureExhaustive } from "./common"
 import { state, type CaretPosition, type State, type ViewState } from "./core"
+import * as log from "./log"
 
 export const initSession = async (attempts?: number): Promise<Session> => {
   const websocket = new WebSocket("ws://localhost:6969")
@@ -33,7 +34,7 @@ export class Session {
    * @param {ToBackend} message - to send to backend
    */
   send(message: ToBackend) {
-    console.log("Sending rpc call to backend:", message)
+    log.debug("Dispatching rpc to backend:", message)
     this.websocket.send(JSON.stringify(message))
   }
 
@@ -77,7 +78,7 @@ export class Session {
    * websocket
    */
   async onMessageReceived(message: ToFrontend) {
-    console.log("Handling message from websocket:", message)
+    log.info("Message received via websocket:", message)
     switch (message.method) {
       case "open_document":
         this.onOpenDocument(message.params)
