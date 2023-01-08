@@ -1,4 +1,5 @@
 import type { KeyInput, Modifiers } from "./rpc"
+import * as log from "./log"
 
 const ModifierBits = {
   CTRL: 0b00000001,
@@ -24,13 +25,12 @@ export const keyboardToKeyInput = (event: KeyboardEvent): KeyInput | null => {
 export const wheelDelta = (event: WheelEvent): number => {
   switch (event.deltaMode) {
     case WheelEvent.DOM_DELTA_PIXEL:
-      console.log(`wheel_event { delta: ${event.deltaY} }`)
       break
     case WheelEvent.DOM_DELTA_LINE:
-      console.error('improperly handled wheel delta mode: "LINE"')
+      log.warn('improperly handled wheel delta mode: "LINE"')
       break
     case WheelEvent.DOM_DELTA_PAGE:
-      console.error('improperly handled wheel delta mode: "PAGE"')
+      log.warn('improperly handled wheel delta mode: "PAGE"')
       break
   }
   return Math.sign(event.deltaY)
