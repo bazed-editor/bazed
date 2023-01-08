@@ -29,7 +29,9 @@ pub(crate) fn apply_motion_to_region(
             let line = text.line_of_offset(region.head);
             let last_line = text.line_of_offset(text.len());
             if line < last_line {
-                text.offset_of_line(line + 1)
+                let next_line_offset = text.offset_of_line(line + 1);
+                text.prev_grapheme_offset(next_line_offset)
+                    .unwrap_or(next_line_offset)
             } else {
                 text.len()
             }
@@ -117,6 +119,29 @@ mod test {
         buffer::movement::apply_motion_to_region, region::Region, test_util,
         user_buffer_op::Motion, view::Viewport, word_boundary::WordBoundaryType,
     };
+
+    #[test]
+    fn test_eol() {
+        test_util::setup_test();
+        fn check(expected: usize, start: usize, t: &str) {
+            assert_eq!(
+                expected,
+                apply_motion_to_region(
+                    &Rope::from(t),
+                    &Viewport::new_ginormeous(),
+                    Region::sticky_cursor(start),
+                    false,
+                    Motion::EndOfLine
+                )
+                .head,
+                "Move to EOL starting at {start} in text {t} should bring to {expected}"
+            );
+        }
+        check(7, 5, "foo\nbar\nbaz");
+        check(11, 9, "foo\nbar\nbaz");
+        check(3, 1, "foo\n");
+        check(0, 0, "");
+    }
 
     #[test]
     fn test_find_next() {
