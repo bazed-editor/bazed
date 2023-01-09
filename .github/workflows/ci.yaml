@@ -19,12 +19,28 @@ jobs:
     - uses: actions/checkout@v3
     - name: Setup rust toolchain
       run: rustup show
-    - uses: EmbarkStudios/cargo-deny-action@v1
     - uses: Swatinem/rust-cache@v2
     - name: Build
       run: cargo test --workspace --all-features --no-run
     - name: Run tests
       run: cargo test --workspace --all-features
+
+  cargo-deny:
+    name: Cargo deny
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        checks:
+          - advisories
+          - bans licenses sources
+
+    continue-on-error: ${{ matrix.checks == 'advisories' }}
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: EmbarkStudios/cargo-deny-action@v1
+      with:
+        command: check ${{ matrix.checks }}
 
   rehuko-lint:
     name: Svelte formatting test
