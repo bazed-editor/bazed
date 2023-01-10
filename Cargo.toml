@@ -30,7 +30,7 @@ unicode-general-category = "0.6.0"
 nonempty = "0.8.1"
 
 futures = { version = "0.3.25", default-features = false, features = ["std"] }
-tokio = { version = "1.23.0", features = ["rt", "net", "macros", "time", "sync"] }
+tokio = { version = "1.24.1", features = ["rt", "net", "macros", "time", "sync"] }
 
 bazed-rpc = { path = "crates/bazed-rpc", version = "0.0.0" }
 bazed-core = { path = "crates/bazed-core", version = "0.0.0" }
