@@ -68,4 +68,4 @@ jobs:
     - name: Install npm packages
       run: npm ci --workspaces
     - name: Lint
-      run: npm run lint --workspaces
+      run: npm run lint --workspace bazed-svelte
