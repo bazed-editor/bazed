@@ -16,9 +16,8 @@
     @fires CaretPosition#mousedown - click position, by line and column
     @fires MouseWheel#mousewheel - scrolled up or down
 -->
-
 <script lang="ts">
-  import { onMount, createEventDispatcher } from "svelte"
+  import { createEventDispatcher } from "svelte"
 
   import type { CaretPosition } from "./core"
   import type { Config } from "./config"
@@ -28,7 +27,6 @@
   import { getModifiers, keyboardToKeyInput, wheelDelta } from "./event"
 
   type pixels = number
-  type line = number
 
   export let config: Config
   export let lines: string[]
@@ -82,14 +80,6 @@
   const transformToScreenPosition = ([x, y]: Vector2): Vector2 => [x * columnWidth, y * lineHeight]
 
   ////////////////////////////////////////////////////////////////////////////////
-
-  const longestLine = (text: string[]): string =>
-    text.reduce((a, b) => (a.length < b.length ? b : a), "")
-
-  $: linesViewWidth = lines ? longestLine(lines).length : 1
-  $: textViewWidth = width - gutterWidth
-  $: textWidthToVisibleRatio = (linesViewWidth * columnWidth - config.textOffset) / width
-  $: horizontalScrollerWidth = textViewWidth / textWidthToVisibleRatio
 
   let scrollOffset: number = 0
   $: scrollOffset = firstLine * lineHeight
