@@ -2,7 +2,7 @@ import { ensureExhaustive } from "./common"
 import * as log from "./log"
 import { state, type CaretPosition, type State, type Uuid } from "./core"
 
-export const initSession = async (attempts?: number): Promise<Session> => {
+export const initSession = async (): Promise<Session> => {
   const websocket = new WebSocket("ws://localhost:6969")
   await new Promise((resolve, reject) => {
     websocket.onopen = (event) => resolve(event)
@@ -53,7 +53,7 @@ export class Session {
 
   /**
    * handle mouse wheel
-   * @param {number} line_delta - count of lines to scroll, positive to scroll down
+   * @param {number} mouseWheel - count of lines to scroll, positive to scroll down
    */
   handleMouseWheel(view_id: string, mouseWheel: MouseWheel) {
     this.send({ method: "mouse_scroll", params: { view_id, line_delta: mouseWheel.delta } })
@@ -104,7 +104,7 @@ export class Session {
   /** expected behavior is for the frontend to update the view */
   async onUpdateView(params: UpdateView["params"]) {
     state.update((state) => {
-      let old = state.views[params.view_id]
+      const old = state.views[params.view_id]
       if (!old) {
         console.error("Got UpdateView for unknown view id, ignoring...")
       } else {

@@ -28,6 +28,7 @@ export const stringSplice = (
 }
 
 /** Allows to ensure exhaustive matches in switch-case statements */
+/* eslint-disable-next-line @typescript-eslint/no-empty-function */
 export const ensureExhaustive = (_: never) => {}
 
 /** elko really hates this name */

@@ -32,7 +32,7 @@ const firebug = (level: Level, location?: string, message?: any[], ...params: an
 }
 
 export const LOGGERS: Logger[] = [firebug]
-export let LEVEL: Level = "debug"
+export const LEVEL: Level = "debug"
 
 const debugInfo = (height: number = 5): string | undefined => {
   const error = new Error()
