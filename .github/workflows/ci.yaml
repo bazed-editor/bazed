@@ -20,6 +20,7 @@ jobs:
     - name: Setup rust toolchain
       run: rustup show
     - uses: Swatinem/rust-cache@v2
+    - uses: r7kamura/rust-problem-matchers@v1
     - name: Build
       run: cargo test --workspace --all-features --no-run
     - name: Run tests
