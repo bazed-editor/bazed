@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// A combination of held [Modifier]s and a [Key].
+/// A combination of held [Modifiers] and a [Key].
 // TODO figure out normalization: Do we get `Shift+a` or do we get `Key::Char('A')`?
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

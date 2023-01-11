@@ -1,4 +1,5 @@
 #![forbid(unreachable_pub)]
+#![deny(rustdoc::broken_intra_doc_links)]
 #![allow(rustdoc::private_intra_doc_links)]
 //! The input mapper is the primary component that maps input-events to functions and other, semantic events.
 //! It manages loading the configuration and the logic for interpreting key inputs (i.e. detecting input chains).
