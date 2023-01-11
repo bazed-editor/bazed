@@ -10,7 +10,7 @@ fn main() {
     println!("cargo:rerun-if-changed={svelte_dir}/svelte.config.js");
 
     let status = std::process::Command::new(&npm_command)
-        .args(&["--prefix", &npm_workspace_root, "ci", "-w", &svelte_dir])
+        .args(["--prefix", &npm_workspace_root, "ci", "-w", &svelte_dir])
         .status()
         .expect("npm ci failed");
 
@@ -19,7 +19,7 @@ fn main() {
     }
 
     let status = std::process::Command::new(&npm_command)
-        .args(&[
+        .args([
             "run",
             "--prefix",
             &npm_workspace_root,

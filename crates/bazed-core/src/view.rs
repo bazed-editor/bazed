@@ -62,7 +62,7 @@ impl Viewport {
     /// attempt to keep it a minimum of `scroll_off` lines from the viewport edges
     /// as long as we're not at the start of the file
     pub fn with_line_in_view(&self, line_nr: usize, scroll_off: usize) -> Self {
-        let mut vp = self.clone();
+        let mut vp = *self;
         vp.first_line = if line_nr < vp.first_line + scroll_off {
             line_nr.saturating_sub(scroll_off)
         } else if line_nr > vp.last_line().saturating_sub(scroll_off) {

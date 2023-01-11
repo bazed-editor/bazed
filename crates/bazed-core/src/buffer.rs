@@ -61,6 +61,10 @@ impl Buffer {
         self.text.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.text.is_empty()
+    }
+
     pub fn line_count(&self) -> usize {
         self.text.measure::<LinesMetric>()
     }
@@ -189,7 +193,7 @@ impl Buffer {
         for region in self.regions.carets() {
             // See xi-editors `offset_for_delete_backwards` function in backward.rs...
             // all I'll say is `#[allow(clippy::cognitive_complexity)]`.
-            let range = apply_motion_to_region(&self.text, &vp, region, true, motion);
+            let range = apply_motion_to_region(&self.text, vp, region, true, motion);
             builder.delete(range);
         }
         let delta = builder.build();
@@ -232,7 +236,7 @@ impl Buffer {
     fn jump_carets_into_range_of_delta(&mut self, delta: &RopeDelta) {
         let (before_undo_interval, replacement_length) = delta.summary();
         let affected_range_end = before_undo_interval.start() + replacement_length;
-        self.regions.apply_delta(&delta);
+        self.regions.apply_delta(delta);
 
         // Jump all carets into the changed area, ensuring that the user
         // sees where stuff has changed

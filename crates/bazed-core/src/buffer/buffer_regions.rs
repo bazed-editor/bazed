@@ -130,7 +130,7 @@ impl BufferRegions {
         // Then merge overlapping regions
         let mut i = 0;
         while i < (self.carets.len() - 1) {
-            let caret_b = self.regions.get(&self.carets[i + 1]).unwrap().clone();
+            let caret_b = *self.regions.get(&self.carets[i + 1]).unwrap();
             let caret_a = self.regions.get_mut(&self.carets[i]).unwrap();
             if caret_a.range().end >= caret_b.range().start {
                 // TODO I'm not sure if this is the behavior we want,

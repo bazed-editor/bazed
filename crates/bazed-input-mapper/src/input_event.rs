@@ -81,7 +81,7 @@ impl std::fmt::Display for Modifiers {
                 write!(f, "-")?;
             }
             first = false;
-            write!(f, "{}", c)
+            write!(f, "{c}")
         };
         if self.contains(Modifiers::CTRL) {
             helper('C')?;
@@ -204,8 +204,7 @@ mod test {
         for key in key_string_examples {
             assert!(
                 Key(key.to_string()).is_key_string(),
-                "{} should be a key string",
-                key
+                "{key} should be a key string",
             );
         }
     }
@@ -217,8 +216,7 @@ mod test {
         for key in named_key_attribute_value_examples {
             assert!(
                 Key(key.to_string()).is_named_key_attribute_value(),
-                "{} should be a named key attribute value",
-                key
+                "{key} should be a named key attribute value",
             );
         }
     }
