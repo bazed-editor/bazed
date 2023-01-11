@@ -30,14 +30,7 @@ fn cargo_fmt_check() {
         .output()
         .unwrap();
 
-    if !output.status.success() {
-        Command::new("cargo")
-            .arg("fmt")
-            .current_dir(project_root())
-            .output()
-            .unwrap();
-        panic!("code wasn't formatted");
-    }
+    assert!(output.status.success());
 }
 
 #[test]
