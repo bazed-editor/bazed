@@ -1,5 +1,4 @@
 import staticAdapter from "@sveltejs/adapter-static"
-import { vitePreprocess } from "@sveltejs/kit/vite"
 import preprocess from "svelte-preprocess"
 
 /** @type {import('@sveltejs/kit').Config} */
