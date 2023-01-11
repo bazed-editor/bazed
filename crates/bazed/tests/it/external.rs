@@ -65,3 +65,15 @@ fn cargo_doc_check() {
 
     assert!(output.status.success());
 }
+
+#[test]
+fn cargo_clippy_check() {
+    let output = Command::new("cargo")
+        .args(["clippy", "--all-features", "--", "-D", "warnings"])
+        .current_dir(project_root())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+}
