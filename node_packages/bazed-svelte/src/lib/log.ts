@@ -32,6 +32,7 @@ const firebug = (level: Level, location?: string, message?: any[], ...params: an
 }
 
 export const LOGGERS: Logger[] = [firebug]
+// eslint-disable-next-line
 export let LEVEL: Level = "debug"
 
 const debugInfo = (height: number = 5): string | undefined => {
