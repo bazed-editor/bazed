@@ -17,6 +17,11 @@ fn project_root() -> PathBuf {
 
 #[test]
 fn cargo_fmt_check() {
+    if env::var_os("CI").is_some() {
+        // we are checking formatting separately in CI
+        return;
+    }
+
     let output = Command::new("cargo")
         .args(["fmt", "--", "--check"])
         .current_dir(project_root())
@@ -55,6 +60,11 @@ fn cargo_deny_check() {
 
 #[test]
 fn cargo_doc_check() {
+    if env::var_os("CI").is_some() {
+        // we are checking docs separately in CI
+        return;
+    }
+
     let output = Command::new("cargo")
         .args(["doc", "--no-deps", "--document-private-items"])
         .current_dir(project_root())
@@ -68,8 +78,20 @@ fn cargo_doc_check() {
 
 #[test]
 fn cargo_clippy_check() {
+    if env::var_os("CI").is_some() {
+        // we are checking clippy separately in CI
+        return;
+    }
+
     let output = Command::new("cargo")
-        .args(["clippy", "--all-features", "--", "-D", "warnings"])
+        .args([
+            "clippy",
+            "--workspace",
+            "--all-features",
+            "--",
+            "-D",
+            "warnings",
+        ])
         .current_dir(project_root())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
