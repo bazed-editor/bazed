@@ -168,6 +168,7 @@
     style:background={config.theme.editorBg}
   >
     <textarea
+      autofocus
       bind:this={input}
       tabindex="-1"
       wrap="off"
