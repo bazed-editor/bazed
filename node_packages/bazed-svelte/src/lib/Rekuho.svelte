@@ -18,8 +18,9 @@
 -->
 <script lang="ts">
   import { createEventDispatcher } from "svelte"
+  import * as R from "ramda"
 
-  import type { CaretPosition } from "./core"
+  import type { Caret, Coordinate } from "./core"
   import type { Config } from "./config"
   import { measureOnChild as fontMeasure, fontToString } from "./font"
   import type { Vector2 } from "./linearAlgebra"
@@ -31,7 +32,7 @@
   export let config: Config
   export let lines: string[]
   export let firstLine: number
-  export let carets: CaretPosition[]
+  export let carets: Caret[]
 
   let width: pixels
   let height: pixels
@@ -45,14 +46,14 @@
   type Events = {
     resize: Resize
     keyinput: KeyInput
-    mousedown: CaretPosition
+    mousedown: Coordinate
     mousewheel: MouseWheel
   }
 
   const dispatch = createEventDispatcher<Events>()
 
   const emitKeyboardInput = (input: KeyInput) => dispatch("keyinput", input)
-  const onMouseClicked = (pos: CaretPosition) => dispatch("mousedown", pos)
+  const onMouseClicked = (pos: Coordinate) => dispatch("mousedown", pos)
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -157,6 +158,7 @@
     style:left="{gutterWidth + config.textOffset}px"
     style:background={config.theme.editorBg}
   >
+    <!-- svelte-ignore a11y-autofocus -->
     <textarea
       autofocus
       bind:this={input}
@@ -188,19 +190,38 @@
       {/each}
     </div>
 
-    <div class="cursors-layer">
-      {#each carets as { line, col }, i}
-        {@const [x, y] = transformToScreenPosition([col, line])}
-        <div
-          class="cursor"
-          id="cursor-{i}"
-          style:visibility="inherit"
-          style:width="{columnWidth}px"
-          style:height="{lineHeight}px"
-          style:background={config.theme.cursorColorPrimary}
-          style:left="{x}px"
-          style:top="{y}px"
-        />
+    <div class="caret-layer">
+      {#each carets as c, i}
+        <!-- Single caret -->
+        {#if R.equals(c.head, c.tail)}
+          {@const [x, y] = transformToScreenPosition([c.head.col, c.head.line])}
+          <div
+            class="caret"
+            id="caret-{i}"
+            style:visibility="inherit"
+            style:width="{columnWidth}px"
+            style:height="{lineHeight}px"
+            style:background={config.theme.cursorColorPrimary}
+            style:left="{x}px"
+            style:top="{y}px"
+          />
+          <!-- Selection -->
+        {:else}
+          {@const [x1, y1] = transformToScreenPosition([c.head.col, c.head.line])}
+          {@const [x2, y2] = transformToScreenPosition([c.tail.col, c.tail.line])}
+          {@const [x, y] = [Math.min(x1, x2), Math.min(y1, y2)]}
+          {@const [w, h] = [Math.abs(x1 - x2), Math.abs(y1 - y2)]}
+          <div
+            class="selection"
+            id="selection-{i}"
+            style:visibility="inherit"
+            style:background={config.theme.cursorColorPrimary}
+            style:width="{w}px"
+            style:height="{h}px"
+            style:left="{x}px"
+            style:top="{y}px"
+          />
+        {/if}
       {/each}
     </div>
   </div>
@@ -271,10 +292,10 @@
   .line-view
     white-space: pre
 
-  .cursors-layer
+  .carets-layer
     position: absolute
     top: 0
 
-  .cursor
+  .caret
     position: absolute
 </style>

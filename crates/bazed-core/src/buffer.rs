@@ -85,6 +85,20 @@ impl Buffer {
                 .expect("Caret stored in BufferRegions was not a valid offset into the buffer")
         })
     }
+
+    // Great naming... better than all_caret_coordinate_regions
+    pub fn all_caret_region_positions(&self) -> NonEmpty<(Position, Position)> {
+        self.all_carets().map(|x| {
+            let head = Position::from_offset(&self.text, x.head).expect(
+                "Caret head stored in BufferRegions was not a valid offset into the buffer",
+            );
+            let tail = Position::from_offset(&self.text, x.tail).expect(
+                "Caret tail stored in BufferRegions was not a valid offset into the buffer",
+            );
+            (head, tail)
+        })
+    }
+
     pub fn primary_caret(&self) -> &Region {
         self.regions.primary_caret()
     }

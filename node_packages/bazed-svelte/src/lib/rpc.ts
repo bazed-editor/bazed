@@ -1,6 +1,6 @@
 import { ensureExhaustive } from "./common"
 import * as log from "./log"
-import { state, type CaretPosition, type State, type Uuid } from "./core"
+import { state, type Caret, type State, type Uuid } from "./core"
 
 export const initSession = async (): Promise<Session> => {
   const websocket = new WebSocket("ws://localhost:6969")
@@ -45,9 +45,9 @@ export class Session {
 
   /**
    * handle mouse clicks
-   * @param {CaretPosition} position - location - as line:column - of click
+   * @param {Caret} position - location - as line:column - of click
    */
-  handleMouseClicked(view_id: string, position: CaretPosition) {
+  handleMouseClicked(view_id: string, position: Caret) {
     this.send({ method: "mouse_input", params: { view_id, position } })
   }
 
@@ -136,7 +136,7 @@ type ToBackend = ViewportChanged | KeyPressed | MouseInput | MouseScroll
 type ViewData = {
   first_line: number
   text: string[]
-  carets: CaretPosition[]
+  carets: Caret[]
   vim_mode: string
 }
 
