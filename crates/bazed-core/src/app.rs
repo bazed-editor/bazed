@@ -201,24 +201,33 @@ impl App {
 }
 
 pub async fn start(addr: &str, path: Option<std::path::PathBuf>) -> Result<()> {
-    let (send, mut recv) = bazed_rpc::server::wait_for_client(addr).await?;
+    loop {
+        let path = path.clone();
+        let (send, mut recv) = bazed_rpc::server::wait_for_client(addr).await?;
 
-    let core = Arc::new(RwLock::new(App::new(send)));
+        let core = Arc::new(RwLock::new(App::new(send)));
 
-    if let Some(path) = path {
-        core.write().await.open_file(path).await?;
-    } else {
-        core.write().await.open_ephemeral().await?;
+        tokio::spawn({
+            let core = core.clone();
+            async move {
+                let res = if let Some(path) = path {
+                    core.write().await.open_file(path).await
+                } else {
+                    core.write().await.open_ephemeral().await
+                };
+                if let Err(err) = res {
+                    tracing::error!(?err, "Error opening file");
+                }
+
+                while let Some(rpc_call) = recv.next().await {
+                    let mut core = core.write().await;
+                    if let Err(err) = core.handle_rpc_call(rpc_call).await {
+                        tracing::error!("Failed to handle rpc call: {err:?}");
+                    }
+                }
+            }
+        });
     }
-
-    while let Some(rpc_call) = recv.next().await {
-        let mut core = core.write().await;
-        if let Err(err) = core.handle_rpc_call(rpc_call).await {
-            tracing::error!("Failed to handle rpc call: {err:?}");
-        }
-    }
-
-    Ok(())
 }
 #[cfg(test)]
 mod tests {
