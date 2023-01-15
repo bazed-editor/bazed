@@ -44,5 +44,7 @@ async fn main() -> Result<()> {
             tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
         }
     }
+
+    #[cfg(feature = "tauri")]
     Ok(())
 }
