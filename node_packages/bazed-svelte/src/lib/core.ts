@@ -3,7 +3,7 @@ import { writable } from "svelte/store"
 export type Uuid = string
 export type ViewId = Uuid
 export type Coordinate = { line: number; col: number }
-export type Caret = { head: Coordinate; tail: Coordinate }
+export type CoordinateRegion = { head: Coordinate; tail: Coordinate }
 
 /** cached view state from backend */
 export type State = {
@@ -12,7 +12,7 @@ export type State = {
       filePath: string | null
       lines: string[]
       firstLine: number
-      carets: Caret[]
+      carets: CoordinateRegion[]
     }
   }
 }

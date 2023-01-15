@@ -20,19 +20,21 @@
   import { createEventDispatcher } from "svelte"
   import * as R from "ramda"
 
-  import type { Caret, Coordinate } from "./core"
+  import type { CoordinateRegion, Coordinate } from "./core"
   import type { Config } from "./config"
   import { measureOnChild as fontMeasure, fontToString } from "./font"
   import type { Vector2 } from "./linearAlgebra"
   import type { KeyInput, MouseWheel } from "./rpc"
   import { getModifiers, keyboardToKeyInput, wheelDelta } from "./event"
+  import { log } from "./log"
 
   type pixels = number
+  type ScreenPosition = { col: pixels; line: pixels }
 
   export let config: Config
   export let lines: string[]
   export let firstLine: number
-  export let carets: Caret[]
+  export let carets: CoordinateRegion[]
 
   let width: pixels
   let height: pixels
@@ -78,7 +80,32 @@
   $: lineCount = Math.ceil(height / lineHeight)
   $: columnCount = Math.ceil(width / columnWidth)
 
-  const transformToScreenPosition = ([x, y]: Vector2): Vector2 => [x * columnWidth, y * lineHeight]
+  const transformToScreenPosition = ([x, y]: Vector2): ScreenPosition => {
+    return {
+      col: x * columnWidth,
+      line: y * lineHeight,
+    }
+  }
+
+  const transformToSelection = (
+    caret: CoordinateRegion,
+  ): { start: ScreenPosition; end: ScreenPosition } => {
+    let start = caret.head
+    let end = caret.tail
+
+    if (
+      caret.head.line > caret.tail.line ||
+      (caret.head.line === caret.tail.line && caret.head.col > caret.tail.col)
+    ) {
+      start = caret.tail
+      end = caret.head
+    }
+
+    return {
+      start,
+      end,
+    }
+  }
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -194,7 +221,7 @@
       {#each carets as c, i}
         <!-- Single caret -->
         {#if R.equals(c.head, c.tail)}
-          {@const [x, y] = transformToScreenPosition([c.head.col, c.head.line])}
+          {@const { col, line } = transformToScreenPosition([c.head.col, c.head.line])}
           <div
             class="caret"
             id="caret-{i}"
@@ -202,25 +229,35 @@
             style:width="{columnWidth}px"
             style:height="{lineHeight}px"
             style:background={config.theme.cursorColorPrimary}
-            style:left="{x}px"
-            style:top="{y}px"
+            style:left="{col}px"
+            style:top="{line}px"
           />
           <!-- Selection -->
         {:else}
-          {@const [x1, y1] = transformToScreenPosition([c.head.col, c.head.line])}
-          {@const [x2, y2] = transformToScreenPosition([c.tail.col, c.tail.line])}
-          {@const [x, y] = [Math.min(x1, x2), Math.min(y1, y2)]}
-          {@const [w, h] = [Math.abs(x1 - x2), Math.abs(y1 - y2)]}
+          {@const { start: start, end: end } = transformToSelection(c)}
+          {@const [start_pos, end_pos] = [
+            transformToScreenPosition([start.col, start.line]),
+            transformToScreenPosition([end.col, end.line]),
+          ]}
           <div
             class="selection"
             id="selection-{i}"
             style:visibility="inherit"
-            style:background={config.theme.cursorColorPrimary}
-            style:width="{w}px"
-            style:height="{h}px"
-            style:left="{x}px"
-            style:top="{y}px"
-          />
+          >
+            {#each R.range(start.line, end.line + 1) as line, j}
+              {@const lineStart = j == 0 ? start_pos.col : 0}
+              {@const lineEnd = j === end.line - start.line ? end_pos.col : width}
+              <!-- TODO -->
+              <div
+                class="selection-line"
+                style:background={config.theme.cursorColorPrimary}
+                style:height="{lineHeight}px"
+                style:top="{line * lineHeight}px"
+                style:left="{lineStart}px"
+                style:width="{lineEnd - lineStart}px"
+              />
+            {/each}
+          </div>
         {/if}
       {/each}
     </div>
@@ -297,5 +334,11 @@
     top: 0
 
   .caret
+    position: absolute
+
+  .selection
+    opacity: 0.5
+  
+  .selection-line
     position: absolute
 </style>
