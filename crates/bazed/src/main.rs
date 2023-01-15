@@ -34,7 +34,10 @@ async fn main() -> Result<()> {
     });
 
     if run_frontend {
+        #[cfg(feature = "tauri")]
         bazed_tauri::run_frontend();
+        #[cfg(not(feature = "tauri"))]
+        panic!("please compile with the `tauri`-feature enabled or pass --no-frontend");
     } else {
         // Wait indefinitely to keep backend task running
         loop {
