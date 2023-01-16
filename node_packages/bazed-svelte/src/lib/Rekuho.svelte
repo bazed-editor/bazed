@@ -286,12 +286,13 @@
   -->
 </div>
 
-<style lang="sass">
-  .view
-    position: relative
-    overflow: hidden
-    width: 100%
-    height: 100%
+<style lang="scss">
+  .view {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+  }
 
   // .scrollbar
   //   position: absolute
@@ -299,47 +300,57 @@
   // .scroller
   //   position: absolute
 
-  .gutter-cell
-    width: 50px
-    font-family: monospace
-    position: absolute
-    text-align: right
+  .gutter-cell {
+    width: 50px;
+    font-family: monospace;
+    position: absolute;
+    text-align: right;
+  }
 
-  .container
-    position: absolute
-    width: 1000000px
-    height: 1000000px
+  .container {
+    position: absolute;
+    width: 1000000px;
+    height: 1000000px;
+  }
 
-  textarea
-    opacity: 0
-    padding: 0
-    border: 0
-    margin: 0
+  textarea {
+    opacity: 0;
+    padding: 0;
+    border: 0;
+    margin: 0;
 
-    width: 0
-    height: 0
+    width: 0;
+    height: 0;
+  }
 
-  .lines-container
-    position: absolute
+  .lines-container {
+    position: absolute;
+  }
 
-  .line-container
-    position: absolute
-    width: 100%
-    cursor: text
+  .line-container {
+    position: absolute;
+    width: 100%;
+    cursor: text;
+  }
 
-  .line-view
-    white-space: pre
+  .line-view {
+    white-space: pre;
+  }
 
-  .caret-layer
-    position: absolute
-    top: 0
+  .caret-layer {
+    position: absolute;
+    top: 0;
+  }
 
-  .caret
-    position: absolute
+  .caret {
+    position: absolute;
+  }
 
-  .selection
-    opacity: 0.5
-  
-  .selection-line
-    position: absolute
+  .selection {
+    opacity: 0.5;
+  }
+
+  .selection-line {
+    position: absolute;
+  }
 </style>
