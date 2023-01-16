@@ -61,7 +61,7 @@ pub enum ToBackend {
     /// Mouse was clicked notification.
     MouseInput {
         view_id: Uuid,
-        /// Absolute coordinates, see [CaretPosition]
+        /// Absolute coordinates, see [Coordinate]
         position: Coordinate,
     },
     /// Mouse wheel turned notification.
