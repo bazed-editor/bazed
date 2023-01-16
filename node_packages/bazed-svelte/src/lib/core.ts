@@ -7,14 +7,12 @@ export type CaretPosition = { line: number; col: number }
 /** cached view state from backend */
 export type State = {
   views: {
-    [id: ViewId]:
-      | undefined
-      | {
-          filePath: string | null
-          lines: string[]
-          firstLine: number
-          carets: CaretPosition[]
-        }
+    [id: ViewId]: {
+      filePath: string | null
+      lines: string[]
+      firstLine: number
+      carets: CaretPosition[]
+    }
   }
 }
 
