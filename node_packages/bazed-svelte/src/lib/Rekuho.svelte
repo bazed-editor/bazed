@@ -239,20 +239,21 @@
             transformToScreenPosition([start.col, start.line]),
             transformToScreenPosition([end.col, end.line]),
           ]}
+          {@const selectedLines = lines.slice(start.line, end.line + 1)}
           <div
             class="selection"
             id="selection-{i}"
             style:visibility="inherit"
           >
-            {#each R.range(start.line, end.line + 1) as line, j}
+            {#each selectedLines as line, j}
               {@const lineStart = j == 0 ? start_pos.col : 0}
-              {@const lineEnd = j === end.line - start.line ? end_pos.col : width}
-              <!-- TODO -->
+              {@const lineEnd =
+                j === end.line - start.line ? end_pos.col : line.length * columnWidth}
               <div
                 class="selection-line"
                 style:background={config.theme.cursorColorPrimary}
                 style:height="{lineHeight}px"
-                style:top="{line * lineHeight}px"
+                style:top="{(start.line + j) * lineHeight}px"
                 style:left="{lineStart}px"
                 style:width="{lineEnd - lineStart}px"
               />
@@ -329,7 +330,7 @@
   .line-view
     white-space: pre
 
-  .carets-layer
+  .caret-layer
     position: absolute
     top: 0
 
