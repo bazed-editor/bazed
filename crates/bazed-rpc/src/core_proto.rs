@@ -10,8 +10,6 @@ use uuid::Uuid;
 pub struct RequestId(pub Uuid);
 
 /// Absolute position within a document.
-/// It is called "Coordinate" instead of position because
-/// PositionRegion is not a good name.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Coordinate {
