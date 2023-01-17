@@ -5,7 +5,7 @@ use std::{
     path::PathBuf,
 };
 
-use bazed_rpc::core_proto::{CaretPosition, ToFrontend, ViewData};
+use bazed_rpc::core_proto::{Coordinate, CoordinateRegion, ToFrontend, ViewData};
 use uuid::Uuid;
 use xi_rope::Rope;
 
@@ -67,12 +67,18 @@ impl Document {
             .collect::<Vec<_>>()
     }
 
-    pub fn caret_positions(&self) -> Vec<CaretPosition> {
+    pub fn caret_positions(&self) -> Vec<CoordinateRegion> {
         self.buffer
-            .all_caret_positions()
-            .map(|x| CaretPosition {
-                line: x.line,
-                col: x.col,
+            .all_caret_region_positions()
+            .map(|(head, tail)| CoordinateRegion {
+                head: Coordinate {
+                    line: head.line,
+                    col: head.col,
+                },
+                tail: Coordinate {
+                    line: tail.line,
+                    col: tail.col,
+                },
             })
             .into()
     }

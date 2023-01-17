@@ -79,12 +79,27 @@ impl Buffer {
         self.regions.carets()
     }
 
+    // Return the position (head) of all carets
     pub fn all_caret_positions(&self) -> NonEmpty<Position> {
         self.all_carets().map(|x| {
             Position::from_offset(&self.text, x.head)
                 .expect("Caret stored in BufferRegions was not a valid offset into the buffer")
         })
     }
+
+    // Return the head and tail of all carets
+    pub fn all_caret_region_positions(&self) -> NonEmpty<(Position, Position)> {
+        self.all_carets().map(|x| {
+            let head = Position::from_offset(&self.text, x.head).expect(
+                "Caret head stored in BufferRegions was not a valid offset into the buffer",
+            );
+            let tail = Position::from_offset(&self.text, x.tail).expect(
+                "Caret tail stored in BufferRegions was not a valid offset into the buffer",
+            );
+            (head, tail)
+        })
+    }
+
     pub fn primary_caret(&self) -> &Region {
         self.regions.primary_caret()
     }

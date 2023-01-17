@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use bazed_input_mapper::input_event::KeyInput;
 use bazed_rpc::{
     core_proto::ToBackend,
-    core_proto::{CaretPosition, ToFrontend, ViewData},
+    core_proto::{Coordinate, ToFrontend, ViewData},
     server::ClientSendHandle,
 };
 use color_eyre::Result;
@@ -150,7 +150,7 @@ impl App {
         Ok(())
     }
 
-    async fn handle_mouse_input(&mut self, view_id: ViewId, coords: CaretPosition) -> Result<()> {
+    async fn handle_mouse_input(&mut self, view_id: ViewId, coords: Coordinate) -> Result<()> {
         let view = self
             .views
             .get_mut(&view_id)
