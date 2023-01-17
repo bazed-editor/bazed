@@ -9,12 +9,20 @@ use uuid::Uuid;
 #[serde(transparent)]
 pub struct RequestId(pub Uuid);
 
-/// Absolute position within a document
+/// Absolute position within a document.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub struct CaretPosition {
+pub struct Coordinate {
     pub line: usize,
     pub col: usize,
+}
+
+/// A region (i.e. a selection, a caret) defined by two absolute coordinates.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CoordinateRegion {
+    pub head: Coordinate,
+    pub tail: Coordinate,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,7 +31,7 @@ pub struct ViewData {
     pub first_line: usize,
     pub text: Vec<String>,
     /// caret positions are absolute
-    pub carets: Vec<CaretPosition>,
+    pub carets: Vec<CoordinateRegion>,
     pub vim_mode: String,
 }
 
@@ -51,8 +59,8 @@ pub enum ToBackend {
     /// Mouse was clicked notification.
     MouseInput {
         view_id: Uuid,
-        /// Absolute coordinates, see [CaretPosition]
-        position: CaretPosition,
+        /// Absolute coordinates, see [Coordinate]
+        position: Coordinate,
     },
     /// Mouse wheel turned notification.
     MouseScroll {

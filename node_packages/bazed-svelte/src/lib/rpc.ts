@@ -1,6 +1,6 @@
 import { ensureExhaustive } from "./common"
 import * as log from "./log"
-import { state, type CaretPosition, type State, type Uuid } from "./core"
+import { state, type Coordinate, type CoordinateRegion, type State, type Uuid } from "./core"
 
 export const initSession = async (): Promise<Session> => {
   const websocket = new WebSocket("ws://localhost:6969")
@@ -31,7 +31,6 @@ export class Session {
    * @param {ToBackend} message - to send to backend
    */
   send(message: ToBackend) {
-    log.debug("Dispatching rpc to backend:", message)
     this.websocket.send(JSON.stringify(message))
   }
 
@@ -45,9 +44,9 @@ export class Session {
 
   /**
    * handle mouse clicks
-   * @param {CaretPosition} position - location - as line:column - of click
+   * @param {CoordinateRegion} position - location - as line:column - of click
    */
-  handleMouseClicked(view_id: string, position: CaretPosition) {
+  handleMouseClicked(view_id: string, position: Coordinate) {
     this.send({ method: "mouse_input", params: { view_id, position } })
   }
 
@@ -75,7 +74,6 @@ export class Session {
    * websocket
    */
   async onMessageReceived(message: ToFrontend) {
-    log.info("Message received via websocket:", message)
     switch (message.method) {
       case "open_view":
         this.onOpenView(message.params)
@@ -136,7 +134,7 @@ type ToBackend = ViewportChanged | KeyPressed | MouseInput | MouseScroll
 type ViewData = {
   first_line: number
   text: string[]
-  carets: CaretPosition[]
+  carets: CoordinateRegion[]
   vim_mode: string
 }
 

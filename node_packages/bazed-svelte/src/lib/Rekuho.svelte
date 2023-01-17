@@ -18,20 +18,23 @@
 -->
 <script lang="ts">
   import { createEventDispatcher } from "svelte"
+  import * as R from "ramda"
 
-  import type { CaretPosition } from "./core"
+  import type { CoordinateRegion, Coordinate } from "./core"
   import type { Config } from "./config"
   import { measureOnChild as fontMeasure, fontToString } from "./font"
   import type { Vector2 } from "./linearAlgebra"
   import type { KeyInput, MouseWheel } from "./rpc"
   import { getModifiers, keyboardToKeyInput, wheelDelta } from "./event"
+  import { log } from "./log"
 
   type pixels = number
+  type ScreenPosition = { col: pixels; line: pixels }
 
   export let config: Config
   export let lines: string[]
   export let firstLine: number
-  export let carets: CaretPosition[]
+  export let carets: CoordinateRegion[]
 
   let width: pixels
   let height: pixels
@@ -45,14 +48,14 @@
   type Events = {
     resize: Resize
     keyinput: KeyInput
-    mousedown: CaretPosition
+    mousedown: Coordinate
     mousewheel: MouseWheel
   }
 
   const dispatch = createEventDispatcher<Events>()
 
   const emitKeyboardInput = (input: KeyInput) => dispatch("keyinput", input)
-  const onMouseClicked = (pos: CaretPosition) => dispatch("mousedown", pos)
+  const onMouseClicked = (pos: Coordinate) => dispatch("mousedown", pos)
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -77,7 +80,32 @@
   $: lineCount = Math.ceil(height / lineHeight)
   $: columnCount = Math.ceil(width / columnWidth)
 
-  const transformToScreenPosition = ([x, y]: Vector2): Vector2 => [x * columnWidth, y * lineHeight]
+  const transformToScreenPosition = ([x, y]: Vector2): ScreenPosition => {
+    return {
+      col: x * columnWidth,
+      line: y * lineHeight,
+    }
+  }
+
+  const transformToSelection = (
+    caret: CoordinateRegion,
+  ): { start: ScreenPosition; end: ScreenPosition } => {
+    let start = caret.head
+    let end = caret.tail
+
+    if (
+      caret.head.line > caret.tail.line ||
+      (caret.head.line === caret.tail.line && caret.head.col > caret.tail.col)
+    ) {
+      start = caret.tail
+      end = caret.head
+    }
+
+    return {
+      start,
+      end,
+    }
+  }
 
   ////////////////////////////////////////////////////////////////////////////////
 
@@ -157,6 +185,7 @@
     style:left="{gutterWidth + config.textOffset}px"
     style:background={config.theme.editorBg}
   >
+    <!-- svelte-ignore a11y-autofocus -->
     <textarea
       autofocus
       bind:this={input}
@@ -188,19 +217,49 @@
       {/each}
     </div>
 
-    <div class="cursors-layer">
-      {#each carets as { line, col }, i}
-        {@const [x, y] = transformToScreenPosition([col, line])}
-        <div
-          class="cursor"
-          id="cursor-{i}"
-          style:visibility="inherit"
-          style:width="{columnWidth}px"
-          style:height="{lineHeight}px"
-          style:background={config.theme.cursorColorPrimary}
-          style:left="{x}px"
-          style:top="{y}px"
-        />
+    <div class="caret-layer">
+      {#each carets as c, i}
+        <!-- Single caret -->
+        {#if R.equals(c.head, c.tail)}
+          {@const { col, line } = transformToScreenPosition([c.head.col, c.head.line])}
+          <div
+            class="caret"
+            id="caret-{i}"
+            style:visibility="inherit"
+            style:width="{columnWidth}px"
+            style:height="{lineHeight}px"
+            style:background={config.theme.cursorColorPrimary}
+            style:left="{col}px"
+            style:top="{line}px"
+          />
+          <!-- Selection -->
+        {:else}
+          {@const { start: start, end: end } = transformToSelection(c)}
+          {@const [start_pos, end_pos] = [
+            transformToScreenPosition([start.col, start.line]),
+            transformToScreenPosition([end.col, end.line]),
+          ]}
+          {@const selectedLines = lines.slice(start.line, end.line + 1)}
+          <div
+            class="selection"
+            id="selection-{i}"
+            style:visibility="inherit"
+          >
+            {#each selectedLines as line, j}
+              {@const lineStart = j == 0 ? start_pos.col : 0}
+              {@const lineEnd =
+                j === end.line - start.line ? end_pos.col : line.length * columnWidth}
+              <div
+                class="selection-line"
+                style:background={config.theme.cursorColorPrimary}
+                style:height="{lineHeight}px"
+                style:top="{(start.line + j) * lineHeight}px"
+                style:left="{lineStart}px"
+                style:width="{lineEnd - lineStart}px"
+              />
+            {/each}
+          </div>
+        {/if}
       {/each}
     </div>
   </div>
@@ -227,12 +286,13 @@
   -->
 </div>
 
-<style lang="sass">
-  .view
-    position: relative
-    overflow: hidden
-    width: 100%
-    height: 100%
+<style lang="scss">
+  .view {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+  }
 
   // .scrollbar
   //   position: absolute
@@ -240,41 +300,57 @@
   // .scroller
   //   position: absolute
 
-  .gutter-cell
-    width: 50px
-    font-family: monospace
-    position: absolute
-    text-align: right
+  .gutter-cell {
+    width: 50px;
+    font-family: monospace;
+    position: absolute;
+    text-align: right;
+  }
 
-  .container
-    position: absolute
-    width: 1000000px
-    height: 1000000px
+  .container {
+    position: absolute;
+    width: 1000000px;
+    height: 1000000px;
+  }
 
-  textarea
-    opacity: 0
-    padding: 0
-    border: 0
-    margin: 0
+  textarea {
+    opacity: 0;
+    padding: 0;
+    border: 0;
+    margin: 0;
 
-    width: 0
-    height: 0
+    width: 0;
+    height: 0;
+  }
 
-  .lines-container
-    position: absolute
+  .lines-container {
+    position: absolute;
+  }
 
-  .line-container
-    position: absolute
-    width: 100%
-    cursor: text
+  .line-container {
+    position: absolute;
+    width: 100%;
+    cursor: text;
+  }
 
-  .line-view
-    white-space: pre
+  .line-view {
+    white-space: pre;
+  }
 
-  .cursors-layer
-    position: absolute
-    top: 0
+  .caret-layer {
+    position: absolute;
+    top: 0;
+  }
 
-  .cursor
-    position: absolute
+  .caret {
+    position: absolute;
+  }
+
+  .selection {
+    opacity: 0.5;
+  }
+
+  .selection-line {
+    position: absolute;
+  }
 </style>
