@@ -14,7 +14,7 @@ impl Position {
 
     /// Get the position of a given offset in a text.
     /// Will return `None` if the offset is outside the bounds of the text
-    /// If `offset == text.len()`, will return `text.len()`.
+    /// If `offset == text.len()`, will return position of `text.len()`.
     pub fn from_offset(text: &Rope, offset: usize) -> Option<Self> {
         if offset > text.len() {
             None
@@ -23,6 +23,15 @@ impl Position {
             let col = offset - text.offset_of_line(line);
             Some(Position { line, col })
         }
+    }
+
+    /// Get the position of a given offset in a text.
+    /// If `offset >= text.len()`, will return position of `text.len()`.
+    pub fn from_offset_snapping(text: &Rope, offset: usize) -> Self {
+        let offset = offset.min(text.len());
+        let line = text.line_of_offset(offset);
+        let col = offset - text.offset_of_line(line);
+        Position { line, col }
     }
 
     /// Turn a position into an offset at that point.

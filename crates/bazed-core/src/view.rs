@@ -1,6 +1,13 @@
+use bazed_rpc::core_proto::{
+    self, Coordinate, CoordinateRegion, TextStyle, Underline, UnderlineKind,
+};
+use syntect::highlighting::{FontStyle, Highlighter, Theme, ThemeSet};
 use uuid::Uuid;
 
-use crate::document::DocumentId;
+use crate::{
+    buffer::{position::Position, Buffer},
+    document::DocumentId,
+};
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash, derive_more::Display, derive_more::Into)]
 pub struct ViewId(pub Uuid);
@@ -19,6 +26,7 @@ pub struct View {
     pub document_id: DocumentId,
     /// Viewport of this view
     pub vp: Viewport,
+    pub theme: Theme,
 }
 
 impl View {
@@ -26,7 +34,56 @@ impl View {
         Self {
             document_id,
             vp: viewport,
+            theme: ThemeSet::load_defaults()
+                .themes
+                .get("base16-ocean.dark")
+                .unwrap()
+                .clone(),
         }
+    }
+
+    pub fn get_text_styles(&self, buffer: &mut Buffer) -> Vec<(CoordinateRegion, TextStyle)> {
+        let highlighter = Highlighter::new(&self.theme);
+        let spans = buffer.annotated_spans();
+        spans
+            .iter()
+            .map(|(iv, scope_stack)| {
+                let style = highlighter.style_for_stack(&scope_stack.scopes);
+                let style = TextStyle {
+                    foreground: [
+                        style.foreground.r,
+                        style.foreground.g,
+                        style.foreground.b,
+                        style.foreground.a,
+                    ],
+                    background: [
+                        style.background.r,
+                        style.background.g,
+                        style.background.b,
+                        style.background.a,
+                    ],
+                    font_style: core_proto::FontStyle {
+                        bold: style.font_style.contains(FontStyle::BOLD),
+                        italic: style.font_style.contains(FontStyle::ITALIC),
+                        underline: if style.font_style.contains(FontStyle::UNDERLINE) {
+                            Some(Underline {
+                                kind: UnderlineKind::Line,
+                                color: [0, 0, 0, 1],
+                            })
+                        } else {
+                            None
+                        },
+                    },
+                };
+                let start = Position::from_offset_snapping(buffer.head_rope(), iv.start);
+                let end = Position::from_offset_snapping(buffer.head_rope(), iv.end);
+                let region = CoordinateRegion {
+                    head: Coordinate::new(start.line, start.col),
+                    tail: Coordinate::new(end.line, end.col),
+                };
+                (region, style)
+            })
+            .collect()
     }
 }
 

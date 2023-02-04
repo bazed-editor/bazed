@@ -5,6 +5,7 @@
 pub mod app;
 pub mod buffer;
 pub mod document;
+pub mod highlighting;
 pub mod region;
 mod user_buffer_op;
 pub mod view;

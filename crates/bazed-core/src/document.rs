@@ -90,7 +90,7 @@ impl Document {
     /// Additionally, this will later only send updates concerning
     /// the parts of the document that are currently visible / relevant in the frontend.
     pub fn create_update_notification(
-        &self,
+        &mut self,
         view_id: ViewId,
         view: &View,
         vim_mode: VimMode,
@@ -102,6 +102,7 @@ impl Document {
                 text: self.lines_in_viewport(&view.vp),
                 vim_mode: vim_mode.to_string(),
                 carets: self.caret_positions(),
+                styles: view.get_text_styles(&mut self.buffer),
             },
         }
     }

@@ -10,6 +10,7 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
+syntect = "5.0.0"
 xi-rope = { package = "lapce-xi-rope", version = "0.3.1" }
 unicode-general-category.workspace = true
 hotsauce = "0.1.0"
@@ -28,3 +29,4 @@ tap.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
+pretty_assertions.workspace = true

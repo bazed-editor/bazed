@@ -134,6 +134,7 @@ type ToBackend = ViewportChanged | KeyPressed | MouseInput | MouseScroll
 type ViewData = {
   first_line: number
   text: string[]
+  styles: [CoordinateRegion, TextStyle][]
   carets: CoordinateRegion[]
   vim_mode: string
 }
@@ -187,6 +188,25 @@ type MouseScroll = Message<
     line_delta: number
   }
 >
+
+export type RgbaColor = [number, number, number, number]
+
+export type Underline = {
+  kind: "squiggly" | "zig_zag" | "line" | "dotted"
+  color: RgbaColor
+}
+
+export type FontStyle = {
+  bold: boolean
+  italic: boolean
+  underline: Underline | null
+}
+
+export type TextStyle = {
+  foreground: RgbaColor
+  background: RgbaColor
+  font_style: FontStyle
+}
 
 export type MouseWheel = { modifiers: Modifiers; delta: number }
 

@@ -9,13 +9,15 @@
 //! Terminology of `Region`s and `Carets` etc. is specified in [BufferRegions].
 
 use nonempty::NonEmpty;
-use xi_rope::{engine::Engine, DeltaBuilder, LinesMetric, Rope, RopeDelta, RopeInfo};
+use syntect::parsing::ScopeStack;
+use xi_rope::{engine::Engine, spans::Spans, DeltaBuilder, LinesMetric, Rope, RopeDelta, RopeInfo};
 
 use self::{
     buffer_regions::BufferRegions, movement::apply_motion_to_region, position::Position,
     undo_history::UndoHistory,
 };
 use crate::{
+    highlighting::{self, Annotations, Parser},
     region::Region,
     user_buffer_op::{BufferOp, EditType, Motion},
     view::Viewport,
@@ -35,6 +37,8 @@ pub struct Buffer {
     undo_history: UndoHistory,
     /// edit type of the most recently performed action, kept for grouping edits into undo-groups
     last_edit_type: EditType,
+    syntax_parser: highlighting::Parser,
+    annotations: Annotations,
 }
 
 impl Buffer {
@@ -46,6 +50,8 @@ impl Buffer {
             regions: BufferRegions::default(),
             undo_history: UndoHistory::default(),
             last_edit_type: EditType::Other,
+            syntax_parser: Parser::new(),
+            annotations: Annotations::default(),
         }
     }
 
@@ -129,6 +135,14 @@ impl Buffer {
         self.regions.collapse_selections();
     }
 
+    pub fn annotated_spans(&self) -> &Spans<ScopeStack> {
+        self.annotations.spans()
+    }
+
+    pub fn reparse_text(&mut self) {
+        self.annotations.set(self.syntax_parser.parse(&self.text))
+    }
+
     /// Snap all regions to the closest valid points in the buffer.
     ///
     /// This may be required if an action (such as undo, currently) changes the buffer
@@ -149,6 +163,7 @@ impl Buffer {
     pub fn commit_delta(&mut self, delta: RopeDelta, edit_type: EditType) -> Rope {
         tracing::debug!("Committing delta");
         self.regions.apply_delta(&delta);
+        self.annotations.apply_delta(&delta);
 
         if self.last_edit_type != edit_type {
             self.undo_history.start_new_undo_group();
@@ -161,6 +176,11 @@ impl Buffer {
         self.engine.edit_rev(1, undo_group, head_rev.token(), delta);
 
         self.text = self.engine.get_head().clone();
+
+        // regenerate the span annotations synchronously, for now
+        // TODO: make this asynchronous
+        self.reparse_text();
+
         self.text.clone()
     }
 
