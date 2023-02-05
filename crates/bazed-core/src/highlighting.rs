@@ -1,4 +1,4 @@
-use syntect::parsing::{ParseState, ScopeStack, SyntaxSet};
+use syntect::parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet};
 use xi_rope::{
     spans::{Spans, SpansBuilder},
     tree::NodeInfo,
@@ -25,6 +25,22 @@ impl Annotations {
     }
 }
 
+#[allow(unused)]
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum SyntaxQuery<'a> {
+    /// Find a syntax by the file extension it corresponds to
+    Extension(&'a str),
+    /// Find a syntax by name
+    Name(&'a str),
+    /// Find a syntax by trying to identify based on the first line in the file
+    FirstLine(&'a str),
+    /// Try first by extension and then case-insensitive name
+    /// Useful for things like markdown codeblocks, where you may get `rust`, `rs`, etc
+    Token(&'a str),
+    /// Use the plain-text syntax
+    PlainText,
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct Parser {
     syntax_set: SyntaxSet,
@@ -37,8 +53,25 @@ impl Parser {
         }
     }
 
-    pub(crate) fn parse(&self, rope: &Rope) -> Spans<ScopeStack> {
-        let syntax_reference = self.syntax_set.find_syntax_by_extension("rs").unwrap();
+    pub(crate) fn find_syntax(&self, query: SyntaxQuery) -> Option<&SyntaxReference> {
+        match query {
+            SyntaxQuery::Extension(x) => self.syntax_set.find_syntax_by_extension(x),
+            SyntaxQuery::Name(x) => self.syntax_set.find_syntax_by_name(x),
+            SyntaxQuery::FirstLine(x) => self.syntax_set.find_syntax_by_first_line(x),
+            SyntaxQuery::Token(x) => self.syntax_set.find_syntax_by_token(x),
+            SyntaxQuery::PlainText => Some(self.syntax_set.find_syntax_plain_text()),
+        }
+    }
+
+    pub(crate) fn plain_text_syntax(&self) -> &SyntaxReference {
+        self.syntax_set.find_syntax_plain_text()
+    }
+
+    pub(crate) fn parse(
+        &self,
+        rope: &Rope,
+        syntax_reference: &SyntaxReference,
+    ) -> Spans<ScopeStack> {
         let mut state = ParseState::new(syntax_reference);
         let mut spans: SpansBuilder<ScopeStack> = SpansBuilder::new(rope.len());
         let mut start_of_line = 0;
@@ -70,7 +103,7 @@ mod test {
     use syntect::parsing::ScopeStack;
     use xi_rope::Rope;
 
-    use crate::highlighting::Parser;
+    use crate::highlighting::{Parser, SyntaxQuery};
 
     macro_rules! scopes {
         ($($x:literal),*) => { ScopeStack::from_vec(vec![$($x.parse().unwrap()),*]) }
@@ -96,7 +129,10 @@ mod test {
             ]),
             ((11..11), scopes!["source.rust"]),
         ];
-        let actual = parser.parse(&text);
+        let actual = parser.parse(
+            &text,
+            parser.find_syntax(SyntaxQuery::Name("Rust")).unwrap(),
+        );
         let actual = actual
             .iter()
             .map(|(a, b)| ((a.start..a.end), b.clone()))

@@ -10,6 +10,7 @@
 
 use nonempty::NonEmpty;
 use syntect::parsing::ScopeStack;
+use tap::TapOptional;
 use xi_rope::{engine::Engine, spans::Spans, DeltaBuilder, LinesMetric, Rope, RopeDelta, RopeInfo};
 
 use self::{
@@ -17,7 +18,7 @@ use self::{
     undo_history::UndoHistory,
 };
 use crate::{
-    highlighting::{self, Annotations, Parser},
+    highlighting::{self, Annotations, Parser, SyntaxQuery},
     region::Region,
     user_buffer_op::{BufferOp, EditType, Motion},
     view::Viewport,
@@ -39,9 +40,23 @@ pub struct Buffer {
     last_edit_type: EditType,
     syntax_parser: highlighting::Parser,
     annotations: Annotations,
+    file_extension: Option<String>,
 }
 
 impl Buffer {
+    pub fn new(s: String, file_extension: Option<String>) -> Self {
+        let rope = Rope::from(s);
+        Self {
+            engine: Engine::new(rope.clone()),
+            text: rope,
+            regions: BufferRegions::default(),
+            undo_history: UndoHistory::default(),
+            last_edit_type: EditType::Other,
+            syntax_parser: Parser::new(),
+            annotations: Annotations::default(),
+            file_extension,
+        }
+    }
     pub fn new_from_string(s: String) -> Self {
         let rope = Rope::from(s);
         Self {
@@ -52,6 +67,7 @@ impl Buffer {
             last_edit_type: EditType::Other,
             syntax_parser: Parser::new(),
             annotations: Annotations::default(),
+            file_extension: None,
         }
     }
 
@@ -140,7 +156,17 @@ impl Buffer {
     }
 
     pub fn reparse_text(&mut self) {
-        self.annotations.set(self.syntax_parser.parse(&self.text))
+        let syntax = self
+            .file_extension
+            .as_ref()
+            .and_then(|ext| {
+                self.syntax_parser
+                    .find_syntax(SyntaxQuery::Extension(ext))
+                    .tap_none(|| tracing::warn!("No syntax definition found for {ext} files"))
+            })
+            .unwrap_or_else(|| self.syntax_parser.plain_text_syntax());
+        self.annotations
+            .set(self.syntax_parser.parse(&self.text, syntax))
     }
 
     /// Snap all regions to the closest valid points in the buffer.

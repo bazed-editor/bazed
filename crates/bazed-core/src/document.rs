@@ -43,9 +43,10 @@ impl Document {
 
     pub fn open_file(path: PathBuf) -> std::io::Result<Document> {
         let content = std::fs::read_to_string(&path)?;
+        let extension = path.extension().map(|x| x.to_string_lossy().to_string());
         Ok(Self {
             path: Some(path),
-            buffer: Buffer::new_from_string(content),
+            buffer: Buffer::new(content, extension),
         })
     }
 
