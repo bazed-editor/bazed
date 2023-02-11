@@ -28,6 +28,9 @@ maplit = "1.0.2"
 tap = "1.0.1"
 unicode-general-category = "0.6.0"
 nonempty = "0.8.1"
+dashmap = "5.4.0"
+parking_lot = "0.12.1"
+async-trait = "0.1.64"
 
 futures = { version = "0.3.25", default-features = false, features = ["std"] }
 tokio = { version = "1.24.1", features = ["rt", "net", "macros", "time", "sync"] }
@@ -37,6 +40,8 @@ bazed-core = { path = "crates/bazed-core", version = "0.0.0" }
 bazed-tauri = { path = "crates/bazed-tauri", version = "0.0.0" }
 bazed-event-system = { path = "crates/bazed-event-system", version = "0.0.0" }
 bazed-input-mapper = { path = "crates/bazed-input-mapper", version = "0.0.0" }
+bazed-stew-macros = { path = "crates/bazed-stew-macros", version = "0.0.0" }
+bazed-stew-interface = { path = "crates/bazed-stew-interface", version = "0.0.0" }
 
 [workspace.dependencies.tracing-subscriber]
 version = "0.3.16"
