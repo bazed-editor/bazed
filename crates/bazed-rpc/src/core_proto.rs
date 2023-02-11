@@ -4,6 +4,8 @@ use bazed_input_mapper::input_event::KeyInput;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub type RgbaColor = [u8; 4];
+
 /// Id of a request, which is any RPC invocation that expects a response.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -17,6 +19,12 @@ pub struct Coordinate {
     pub col: usize,
 }
 
+impl Coordinate {
+    pub fn new(line: usize, col: usize) -> Self {
+        Self { line, col }
+    }
+}
+
 /// A region (i.e. a selection, a caret) defined by two absolute coordinates.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -27,9 +35,43 @@ pub struct CoordinateRegion {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub struct Underline {
+    pub kind: UnderlineKind,
+    pub color: RgbaColor,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnderlineKind {
+    Squiggly,
+    ZigZag,
+    Line,
+    Dotted,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct FontStyle {
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: Option<Underline>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TextStyle {
+    pub foreground: RgbaColor,
+    pub background: RgbaColor,
+    pub font_style: FontStyle,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct ViewData {
     pub first_line: usize,
     pub text: Vec<String>,
+    /// List of non-overlapping regions into the text and their corresponding styles.
+    pub styles: Vec<(CoordinateRegion, TextStyle)>,
     /// caret positions are absolute
     pub carets: Vec<CoordinateRegion>,
     pub vim_mode: String,

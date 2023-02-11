@@ -44,7 +44,7 @@ impl App {
         }
     }
 
-    async fn open_document(&mut self, document: Document) -> Result<()> {
+    async fn open_document(&mut self, mut document: Document) -> Result<()> {
         let document_id = DocumentId::gen();
         let view_id = ViewId::gen();
         let view = View::new(document_id, Viewport::new(0, 20));
@@ -55,6 +55,7 @@ impl App {
                 view_data: ViewData {
                     first_line: view.vp.first_line,
                     text: document.lines_in_viewport(&view.vp),
+                    styles: view.get_text_styles(&mut document.buffer),
                     carets: document.caret_positions(),
                     vim_mode: self.vim_interface.mode.to_string(),
                 },
@@ -114,7 +115,7 @@ impl App {
         if needs_new_view_info {
             let document = self
                 .documents
-                .get(&view.document_id)
+                .get_mut(&view.document_id)
                 .ok_or(Error::InvalidDocumentId(view.document_id))?;
             self.event_send
                 .send_rpc(document.create_update_notification(
@@ -176,7 +177,7 @@ impl App {
 
         let document = self
             .documents
-            .get(&view.document_id)
+            .get_mut(&view.document_id)
             .ok_or(Error::InvalidDocumentId(view.document_id))?;
 
         let line_count = document.buffer.line_count();
