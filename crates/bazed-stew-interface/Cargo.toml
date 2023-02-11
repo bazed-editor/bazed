@@ -1,0 +1,18 @@
+[package]
+name = "bazed-stew-interface"
+version = "0.0.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+parking_lot.workspace = true
+uuid.workspace = true
+dashmap.workspace = true
+derive_more.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+async-trait.workspace = true
+
+
+bazed-stew-macros.workspace = true
