@@ -13,6 +13,10 @@ derive_more.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 async-trait.workspace = true
+futures.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
 
 
 bazed-stew-macros.workspace = true

@@ -182,9 +182,13 @@ dependencies = [
  "bazed-stew-macros",
  "dashmap",
  "derive_more",
+ "futures",
  "parking_lot",
  "serde",
  "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
  "uuid 1.2.2",
 ]
 
