@@ -20,21 +20,36 @@
 //!     Banana ->>- Stew : function_returned(caller_id: 55, invocation_id: 1, data: "lmao")
 //!     Stew ->>+ Cucumber : call_result(invocation_id: 1, data: "lmao")
 //! ```
+//!
+//! TODO: Deal with invocation timeouts
+//! TODO: Figure out how to include tracing information here so we can get distributed tracing, somehow
 
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use uuid::Uuid;
 
 #[repr(transparent)]
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PluginId(pub Uuid);
 
 #[repr(transparent)]
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FunctionId(pub usize);
 
+impl FunctionId {
+    pub fn gen() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
 #[repr(transparent)]
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct InvocationId(pub Uuid);
+
+impl InvocationId {
+    pub fn gen() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
 
 /// Metadata about a plugin.
 #[repr(C)]
@@ -123,43 +138,52 @@ pub enum StewRpcCall {
 #[serde(rename_all = "snake_case")]
 pub enum StewRpcMessage {
     /// A function call from another plugin.
-    FunctionCalled {
-        /// The internal ID of the function that was called.
-        internal_id: FunctionId,
-        args: serde_json::Value,
-        /// The ID of the plugin that called the function.
-        /// Must be included in the return value response.
-        caller_id: PluginId,
-        /// The ID of the invocation.
-        /// When set, this must be included in the return value response
-        /// such that the caller can match the response to the invocation.
-        ///
-        /// Any function call should yield a [StewRpcCall::FunctionReturn] message
-        invocation_id: Option<InvocationId>,
-    },
+    FunctionCalled(FunctionCalled),
+    InvocationResponse(InvocationResponse),
+}
+
+/// A function call from another plugin.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct FunctionCalled {
+    /// The internal ID of the function that was called.
+    internal_id: FunctionId,
+    args: serde_json::Value,
+    /// The ID of the plugin that called the function.
+    /// Must be included in the return value response.
+    caller_id: PluginId,
+    /// The ID of the invocation.
+    /// When set, this must be included in the return value response
+    /// such that the caller can match the response to the invocation.
+    ///
+    /// Any function call should yield a [StewRpcCall::FunctionReturn] message
+    invocation_id: Option<InvocationId>,
+}
+
+/// A response to some invocation (any call that expects a result via some [InvocationId])
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct InvocationResponse {
+    pub invocation_id: InvocationId,
+    pub kind: InvocationResponseData,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum InvocationResponseData {
     /// A function called by this plugin returned a value.
-    FunctionReturned {
-        /// The ID of the invocation.
-        /// This matches the [InvocationId] of the original function call.
-        invocation_id: InvocationId,
-        /// The return value of the function.
-        return_value: FunctionResult,
-    },
+    FunctionReturned(FunctionResult),
+    /// Result of [StewRpcCall::GetFunction]
+    GotFunctionId(FunctionId),
     /// Result of [StewRpcCall::LoadPlugin], sent when the plugin is loaded.
     PluginLoaded {
-        invocation_id: InvocationId,
         /// The ID of the plugin that was loaded.
         plugin_id: PluginId,
         /// The exact version of the plugin that was loaded.
         version: String,
     },
     /// Some invocation of stew failed.
-    InvocationFailed {
-        /// The ID of the invocation that caused the error.
-        invocation_id: InvocationId,
-        /// Details about the error.
-        message: serde_json::Value,
-    },
+    InvocationFailed(serde_json::Value),
 }
 
 /// The result of a function call, either a value or an error.
@@ -169,4 +193,15 @@ pub enum FunctionResult {
     Value(serde_json::Value),
     /// The function returned an error.
     Error(serde_json::Value),
+}
+
+impl FunctionResult {
+    pub fn parse_into_result<T: DeserializeOwned, E: DeserializeOwned>(
+        self,
+    ) -> Result<Result<T, E>, serde_json::Error> {
+        match self {
+            FunctionResult::Value(v) => Ok(Ok(serde_json::from_value(v)?)),
+            FunctionResult::Error(e) => Ok(Err(serde_json::from_value(e)?)),
+        }
+    }
 }
