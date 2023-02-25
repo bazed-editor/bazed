@@ -1,19 +1,11 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use futures::{
-    channel::{
-        mpsc::{UnboundedReceiver, UnboundedSender},
-        oneshot,
-    },
-    lock::Mutex,
-    SinkExt,
-};
+use futures::{channel::oneshot, future::BoxFuture, Future};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::rpc_proto::{
-    FunctionCalled, FunctionId, InvocationId, InvocationResponseData, PluginId, StewRpcCall,
-    StewRpcMessage,
+    FunctionId, InvocationId, InvocationResponseData, PluginId, StewRpcCall, StewRpcMessage,
 };
 
 macro_rules! expect_invocation_result {
@@ -51,33 +43,56 @@ pub enum Error {
     Serde(#[from] serde_json::Error),
 }
 
-pub type PluginFn = Box<
-    dyn Fn(serde_json::Value) -> Result<serde_json::Value, serde_json::Value>
+pub type PluginFn<D> = Box<
+    dyn Fn(&mut D, serde_json::Value) -> BoxFuture<'static, Result<serde_json::Value, serde_json::Value>>
         + Send
         + Sync
         + 'static,
 >;
 
-pub struct StewClient<S> {
+pub struct StewClient<S, D> {
     stew_send: S,
-    functions: Arc<DashMap<FunctionId, PluginFn>>,
+    functions: Arc<DashMap<FunctionId, PluginFn<D>>>,
     invocations: Arc<DashMap<InvocationId, oneshot::Sender<InvocationResponseData>>>,
 }
 
-impl<S: StewConnectionSender> StewClient<S> {
-    pub fn start<R: StewConnectionReceiver>(
-        stew_send: S,
-        mut stew_recv: R,
-    ) -> (Self, UnboundedReceiver<FunctionCalled>) {
-        let (mut function_call_send, function_call_recv) = futures::channel::mpsc::unbounded();
+impl<S, D> StewClient<S, D>
+where
+    S: StewConnectionSender + Clone,
+    D: Send + Sync + 'static,
+{
+    pub fn start<R: StewConnectionReceiver>(stew_send: S, mut stew_recv: R, mut userdata: D) -> Self {
         let invocations = Arc::new(DashMap::<_, oneshot::Sender<_>>::new());
+        let functions = Arc::new(DashMap::new());
         tokio::spawn({
             let invocations = invocations.clone();
+            let functions = functions.clone();
+            let mut stew_send = stew_send.clone();
             async move {
                 loop {
                     match stew_recv.recv_from_stew::<StewRpcMessage>().await {
                         Ok(Some(StewRpcMessage::FunctionCalled(call))) => {
-                            function_call_send.send(call).await.unwrap();
+                            let function = match functions.get(&call.internal_id) {
+                                Some(f) => f,
+                                None => {
+                                    tracing::error!("Function not found");
+                                    continue;
+                                },
+                            };
+                            let function: &PluginFn<D> = &function;
+                            let result = function(&mut userdata, call.args).await;
+                            if let Some(invocation_id) = call.invocation_id {
+                                let result = stew_send
+                                    .send_to_stew(StewRpcCall::FunctionReturn {
+                                        caller_id: call.caller_id,
+                                        return_value: result.into(),
+                                        invocation_id,
+                                    })
+                                    .await;
+                                if let Err(result) = result {
+                                    tracing::error!("{:?}", result);
+                                }
+                            }
                         },
                         Ok(Some(StewRpcMessage::InvocationResponse(response))) => {
                             if let Some(sender) = invocations.remove(&response.invocation_id) {
@@ -95,14 +110,11 @@ impl<S: StewConnectionSender> StewClient<S> {
                 }
             }
         });
-        (
-            Self {
-                stew_send,
-                functions: Arc::new(DashMap::new()),
-                invocations,
-            },
-            function_call_recv,
-        )
+        Self {
+            stew_send,
+            functions,
+            invocations,
+        }
     }
 
     pub async fn load_plugin(
@@ -125,9 +137,16 @@ impl<S: StewConnectionSender> StewClient<S> {
         )
     }
 
-    pub async fn register_fn(&mut self, name: String, function: PluginFn) -> Result<(), Error> {
+    pub async fn register_fn<F, Fut>(&mut self, name: String, function: F) -> Result<(), Error>
+    where
+        F: Fn(&mut D, serde_json::Value) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<serde_json::Value, serde_json::Value>> + Send + 'static,
+    {
         let function_id = FunctionId::gen();
-        self.functions.insert(function_id, function);
+        self.functions.insert(
+            function_id,
+            Box::new(move |userdata, args| Box::pin(function(userdata, args))),
+        );
         self.send_call(StewRpcCall::RegisterFunction {
             fn_name: name,
             internal_id: function_id,
@@ -213,6 +232,7 @@ impl<S: StewConnectionSender> StewClient<S> {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PluginInfo {
     pub plugin_id: PluginId,
     pub version: String,
