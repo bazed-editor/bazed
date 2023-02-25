@@ -33,7 +33,7 @@ pub struct PluginId(pub Uuid);
 
 #[repr(transparent)]
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct FunctionId(pub usize);
+pub struct FunctionId(pub Uuid);
 
 impl FunctionId {
     pub fn gen() -> Self {
@@ -147,17 +147,17 @@ pub enum StewRpcMessage {
 #[serde(rename_all = "snake_case")]
 pub struct FunctionCalled {
     /// The internal ID of the function that was called.
-    internal_id: FunctionId,
-    args: serde_json::Value,
+    pub internal_id: FunctionId,
+    pub args: serde_json::Value,
     /// The ID of the plugin that called the function.
     /// Must be included in the return value response.
-    caller_id: PluginId,
+    pub caller_id: PluginId,
     /// The ID of the invocation.
     /// When set, this must be included in the return value response
     /// such that the caller can match the response to the invocation.
     ///
     /// Any function call should yield a [StewRpcCall::FunctionReturn] message
-    invocation_id: Option<InvocationId>,
+    pub invocation_id: Option<InvocationId>,
 }
 
 /// A response to some invocation (any call that expects a result via some [InvocationId])
@@ -193,6 +193,19 @@ pub enum FunctionResult {
     Value(serde_json::Value),
     /// The function returned an error.
     Error(serde_json::Value),
+}
+
+impl<T, E> From<Result<T, E>> for FunctionResult
+where
+    T: Serialize,
+    E: Serialize,
+{
+    fn from(result: Result<T, E>) -> Self {
+        match result {
+            Ok(v) => FunctionResult::Value(serde_json::to_value(v).unwrap()),
+            Err(e) => FunctionResult::Error(serde_json::to_value(e).unwrap()),
+        }
+    }
 }
 
 impl FunctionResult {

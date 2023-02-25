@@ -3,6 +3,7 @@ use futures::{
     SinkExt, StreamExt,
 };
 use serde::{de::DeserializeOwned, Serialize};
+use serde_json::json;
 
 use crate::stew_rpc::{self, StewClient, StewConnectionReceiver, StewConnectionSender};
 
@@ -29,6 +30,7 @@ fn foo() {
     let m: PluginMetadata = metadata();
 }
 */
+
 #[async_trait::async_trait]
 impl StewConnectionSender for UnboundedSender<String> {
     async fn send_to_stew<T: Serialize + Send + Sync>(
@@ -53,10 +55,11 @@ impl StewConnectionReceiver for UnboundedReceiver<String> {
     }
 }
 
+#[allow(unused)]
 async fn demo() -> Result<(), stew_rpc::Error> {
     let (stew_send, stew_recv) = futures::channel::mpsc::unbounded();
     let (plugin_send, plugin_recv) = futures::channel::mpsc::unbounded();
-    let (mut stew_client, mut function_call_recv) = StewClient::start(stew_send, plugin_recv);
+    let mut stew_client = StewClient::start(stew_send, plugin_recv, ());
     let banana = stew_client
         .load_plugin("banana".to_string(), ">2.5".to_string())
         .await?;
@@ -65,35 +68,28 @@ async fn demo() -> Result<(), stew_rpc::Error> {
         .get_fn(banana.plugin_id, "applepie".to_string())
         .await?;
 
+    stew_client
+        .register_fn("tractor".to_string(), |(), args| async move {
+            let speed: usize = args["speed"].as_u64().unwrap() as usize;
+            let color: String = args["color"].to_string();
+            Ok(json!(format!("{color} tractor with speed {speed}")))
+        })
+        .await?;
+
     stew_client.notify_ready().await?;
 
     let mut iv = tokio::time::interval(tokio::time::Duration::from_secs(1));
     loop {
-        tokio::select! {
-            _ = iv.tick() => {
-                let fn_result = stew_client
-                    .call_fn_and_await_response::<bool, String>(
-                        banana_applepie,
-                        serde_json::json!({"s": "hello", "n": 12}),
-                    )
-                    .await?;
-                match fn_result {
-                    Ok(x) => println!("banana applepie returned {x}"),
-                    Err(e) => println!("banana applepie errored: {e}"),
-                }
-            }
-            Some(call) = function_call_recv.next() => {
-                let fn_result = stew_client
-                    .call_fn_and_await_response::<bool, String>(
-                        banana_applepie,
-                        serde_json::json!({"s": "hello", "n": 12}),
-                    )
-                    .await?;
-                match fn_result {
-                    Ok(x) => println!("banana applepie returned {x}"),
-                    Err(e) => println!("banana applepie errored: {e}"),
-                }
-            }
+        iv.tick().await;
+        let fn_result = stew_client
+            .call_fn_and_await_response::<bool, String>(
+                banana_applepie,
+                serde_json::json!({"s": "hello", "n": 12}),
+            )
+            .await?;
+        match fn_result {
+            Ok(x) => println!("banana applepie returned {x}"),
+            Err(e) => println!("banana applepie errored: {e}"),
         }
     }
 }
