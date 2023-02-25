@@ -24,15 +24,16 @@
 //! TODO: Deal with invocation timeouts
 //! TODO: Figure out how to include tracing information here so we can get distributed tracing, somehow
 
+use semver::{Version, VersionReq};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use uuid::Uuid;
 
 #[repr(transparent)]
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, derive_more::Display)]
 pub struct PluginId(pub Uuid);
 
 #[repr(transparent)]
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, derive_more::Display)]
 pub struct FunctionId(pub Uuid);
 
 impl FunctionId {
@@ -42,7 +43,7 @@ impl FunctionId {
 }
 
 #[repr(transparent)]
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, derive_more::Display)]
 pub struct InvocationId(pub Uuid);
 
 impl InvocationId {
@@ -67,7 +68,7 @@ pub struct PluginMetadata {
     /// MUST be [semver] compliant, or the plugin will fail to load.
     ///
     /// [semver]: https://semver.org/
-    pub version: String,
+    pub version: Version,
 }
 
 /// Calls from the plugin to the plugin system
@@ -120,7 +121,7 @@ pub enum StewRpcCall {
         /// Name of the plugin to load
         name: String,
         /// Version specification, see [semver](https://docs.rs/semver/1.0.16/semver/struct.VersionReq.html) for details.
-        version_requirement: String,
+        version_requirement: VersionReq,
         invocation_id: InvocationId,
     },
 
@@ -180,7 +181,7 @@ pub enum InvocationResponseData {
         /// The ID of the plugin that was loaded.
         plugin_id: PluginId,
         /// The exact version of the plugin that was loaded.
-        version: String,
+        version: Version,
     },
     /// Some invocation of stew failed.
     InvocationFailed(serde_json::Value),

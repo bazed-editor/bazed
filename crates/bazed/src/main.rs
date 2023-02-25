@@ -27,6 +27,13 @@ async fn main() -> Result<()> {
         }
     }
 
+    bazed_stew::run_stew(vec![concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../target/debug"
+    )
+    .into()])
+    .await;
+
     tokio::spawn(async {
         bazed_core::app::start("127.0.0.1:6969", edited_file.map(Into::into))
             .await
