@@ -1,0 +1,21 @@
+[package]
+name = "copilot"
+version = "0.0.0"
+edition = "2021"
+description = "The bazed editor's github copilot plugin"
+authors.workspace = true
+categories.workspace = true
+keywords.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+
+bazed-stew-interface.workspace = true
+tracing.workspace = true
+interprocess.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing-subscriber.workspace = true
+tracing-error.workspace = true

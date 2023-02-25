@@ -18,6 +18,7 @@ use std::ffi::{c_char, c_void};
 
 mod elk_of_implementation;
 mod foo;
+pub mod ipc_connection;
 pub mod rpc_proto;
 pub mod stew_rpc;
 

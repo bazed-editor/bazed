@@ -16,9 +16,11 @@ tokio.workspace = true
 color-eyre.workspace = true
 bazed-tauri = { workspace = true, optional = true }
 tracing.workspace = true
+tracing-error.workspace = true
 
-tracing-error = "0.2.0"
 tracing-subscriber.workspace = true
+
+bazed-stew.workspace = true
 
 [features]
 default = ["tauri"]

@@ -8,7 +8,6 @@ use serde_json::json;
 use crate::stew_rpc::{self, StewClient, StewConnectionReceiver, StewConnectionSender};
 
 /*
-
 stew_plugin! {
     api_version = "1.1",
     version = b"1.1.0\0",
@@ -19,15 +18,6 @@ stew_plugin! {
         foo::bar: fn(x: *const ::std::ffi::c_char) -> usize,
         foo::baz: fn(x: *const ::std::ffi::c_char) -> usize,
     ]
-}
-
-extern "C" fn init(_stew: *const crate::StewVft0, _data: *mut *mut std::ffi::c_void) -> bool {
-    true
-}
-extern "C" fn main(_stew: *const crate::StewVft0, _data: *mut *mut std::ffi::c_void) {}
-
-fn foo() {
-    let m: PluginMetadata = metadata();
 }
 */
 
@@ -61,7 +51,7 @@ async fn demo() -> Result<(), stew_rpc::Error> {
     let (plugin_send, plugin_recv) = futures::channel::mpsc::unbounded();
     let mut stew_client = StewClient::start(stew_send, plugin_recv, ());
     let banana = stew_client
-        .load_plugin("banana".to_string(), ">2.5".to_string())
+        .load_plugin("banana".to_string(), ">2.5".parse().unwrap())
         .await?;
 
     let banana_applepie = stew_client
@@ -69,7 +59,7 @@ async fn demo() -> Result<(), stew_rpc::Error> {
         .await?;
 
     stew_client
-        .register_fn("tractor".to_string(), |(), args| async move {
+        .register_fn("tractor", |(), args| async move {
             let speed: usize = args["speed"].as_u64().unwrap() as usize;
             let color: String = args["color"].to_string();
             Ok(json!(format!("{color} tractor with speed {speed}")))

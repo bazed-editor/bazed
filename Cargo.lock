@@ -114,6 +114,7 @@ name = "bazed"
 version = "0.0.0"
 dependencies = [
  "bazed-core",
+ "bazed-stew",
  "bazed-tauri",
  "color-eyre",
  "tokio",
@@ -175,6 +176,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "bazed-stew"
+version = "0.0.0"
+dependencies = [
+ "async-trait",
+ "bazed-stew-interface",
+ "dashmap",
+ "derive_more",
+ "futures",
+ "interprocess",
+ "parking_lot",
+ "semver 1.0.16",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid 1.2.2",
+]
+
+[[package]]
 name = "bazed-stew-interface"
 version = "0.0.0"
 dependencies = [
@@ -183,7 +204,9 @@ dependencies = [
  "dashmap",
  "derive_more",
  "futures",
+ "interprocess",
  "parking_lot",
+ "semver 1.0.16",
  "serde",
  "serde_json",
  "thiserror",
@@ -447,6 +470,19 @@ name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
+
+[[package]]
+name = "copilot"
+version = "0.0.0"
+dependencies = [
+ "bazed-stew-interface",
+ "interprocess",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-error",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "core-foundation"
@@ -1357,6 +1393,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "interprocess"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81f2533f3be42fffe3b5e63b71aeca416c1c3bc33e4e27be018521e76b1f38fb"
+dependencies = [
+ "cfg-if",
+ "futures-core",
+ "futures-io",
+ "libc",
+ "rustc_version 0.4.0",
+ "to_method",
+ "tokio",
+ "winapi",
+]
+
+[[package]]
 name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2233,7 +2285,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
 dependencies = [
- "semver 1.0.15",
+ "semver 1.0.16",
 ]
 
 [[package]]
@@ -2306,9 +2358,9 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "1.0.15"
+version = "1.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bfa246f936730408c0abee392cc1a50b118ece708c7f630516defd64480c7d8"
+checksum = "58bc9567378fc7690d6b2addae4e60ac2eeea07becb2c64b9f218b53865cba2a"
 dependencies = [
  "serde",
 ]
@@ -2681,7 +2733,7 @@ dependencies = [
  "rand 0.8.5",
  "raw-window-handle",
  "regex",
- "semver 1.0.15",
+ "semver 1.0.16",
  "serde",
  "serde_json",
  "serde_repr",
@@ -2712,7 +2764,7 @@ dependencies = [
  "cargo_toml",
  "heck 0.4.0",
  "json-patch",
- "semver 1.0.15",
+ "semver 1.0.16",
  "serde_json",
  "tauri-utils",
  "winres",
@@ -2733,7 +2785,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "semver 1.0.15",
+ "semver 1.0.16",
  "serde",
  "serde_json",
  "sha2",
@@ -2816,7 +2868,7 @@ dependencies = [
  "phf 0.10.1",
  "proc-macro2",
  "quote",
- "semver 1.0.15",
+ "semver 1.0.16",
  "serde",
  "serde_json",
  "serde_with",
@@ -2927,6 +2979,12 @@ name = "tinyvec_macros"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
+
+[[package]]
+name = "to_method"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7c4ceeeca15c8384bbc3e011dbd8fccb7f068a440b752b7d9b32ceb0ca0e2e8"
 
 [[package]]
 name = "tokio"
