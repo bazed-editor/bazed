@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use dashmap::DashMap;
 use futures::{channel::oneshot, future::BoxFuture, Future};
+use semver::{Version, VersionReq};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::rpc_proto::{
@@ -22,11 +23,16 @@ macro_rules! expect_invocation_result {
 
 #[async_trait::async_trait]
 pub trait StewConnectionSender: Send + Sync + 'static {
-    async fn send_to_stew<T: Serialize + Send + Sync>(&mut self, msg: T) -> Result<(), Error>;
+    async fn send_to_stew<T: Serialize + Send + Sync + 'static>(
+        &mut self,
+        msg: T,
+    ) -> Result<(), Error>;
 }
 #[async_trait::async_trait]
 pub trait StewConnectionReceiver: Send + Sync + 'static {
-    async fn recv_from_stew<T: DeserializeOwned>(&mut self) -> Result<Option<T>, Error>;
+    async fn recv_from_stew<T: DeserializeOwned + Send + Sync + 'static>(
+        &mut self,
+    ) -> Result<Option<T>, Error>;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -44,7 +50,10 @@ pub enum Error {
 }
 
 pub type PluginFn<D> = Box<
-    dyn Fn(&mut D, serde_json::Value) -> BoxFuture<'static, Result<serde_json::Value, serde_json::Value>>
+    dyn Fn(
+            &mut D,
+            serde_json::Value,
+        ) -> BoxFuture<'static, Result<serde_json::Value, serde_json::Value>>
         + Send
         + Sync
         + 'static,
@@ -61,7 +70,11 @@ where
     S: StewConnectionSender + Clone,
     D: Send + Sync + 'static,
 {
-    pub fn start<R: StewConnectionReceiver>(stew_send: S, mut stew_recv: R, mut userdata: D) -> Self {
+    pub fn start<R: StewConnectionReceiver>(
+        stew_send: S,
+        mut stew_recv: R,
+        mut userdata: D,
+    ) -> Self {
         let invocations = Arc::new(DashMap::<_, oneshot::Sender<_>>::new());
         let functions = Arc::new(DashMap::new());
         tokio::spawn({
@@ -100,7 +113,7 @@ where
                             }
                         },
                         Err(err) => {
-                            tracing::error!("{:?}", err);
+                            tracing::error!("serde error: {:?}", err);
                         },
                         Ok(None) => {
                             tracing::error!("Connection closed");
@@ -120,7 +133,7 @@ where
     pub async fn load_plugin(
         &mut self,
         name: String,
-        version_requirement: String,
+        version_requirement: VersionReq,
     ) -> Result<PluginInfo, Error> {
         let invocation_id = InvocationId::gen();
         self.send_call(StewRpcCall::LoadPlugin {
@@ -137,7 +150,7 @@ where
         )
     }
 
-    pub async fn register_fn<F, Fut>(&mut self, name: String, function: F) -> Result<(), Error>
+    pub async fn register_fn<F, Fut>(&mut self, name: &str, function: F) -> Result<(), Error>
     where
         F: Fn(&mut D, serde_json::Value) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<serde_json::Value, serde_json::Value>> + Send + 'static,
@@ -148,7 +161,7 @@ where
             Box::new(move |userdata, args| Box::pin(function(userdata, args))),
         );
         self.send_call(StewRpcCall::RegisterFunction {
-            fn_name: name,
+            fn_name: name.to_string(),
             internal_id: function_id,
         })
         .await?;
@@ -235,5 +248,5 @@ where
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PluginInfo {
     pub plugin_id: PluginId,
-    pub version: String,
+    pub version: Version,
 }

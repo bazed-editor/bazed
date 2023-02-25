@@ -1,11 +1,16 @@
 [package]
-name = "bazed-stew-interface"
+name = "bazed-stew"
 version = "0.0.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors.workspace = true
+categories.workspace = true
+keywords.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [dependencies]
+interprocess.workspace = true
 parking_lot.workspace = true
 uuid.workspace = true
 dashmap.workspace = true
@@ -17,8 +22,5 @@ futures.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-interprocess.workspace = true
+bazed-stew-interface.workspace = true
 semver.workspace = true
-
-
-bazed-stew-macros.workspace = true
