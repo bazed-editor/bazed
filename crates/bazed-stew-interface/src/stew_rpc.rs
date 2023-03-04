@@ -22,17 +22,18 @@ macro_rules! expect_invocation_result {
 }
 
 #[async_trait::async_trait]
-pub trait StewConnectionSender: Send + Sync + 'static {
-    async fn send_to_stew<T: Serialize + Send + Sync + 'static>(
-        &mut self,
-        msg: T,
-    ) -> Result<(), Error>;
+pub trait StewConnectionSender<T>: Send + Sync + 'static
+where
+    T: Serialize + Send + Sync + 'static,
+{
+    async fn send_to_stew(&mut self, msg: T) -> Result<(), Error>;
 }
 #[async_trait::async_trait]
-pub trait StewConnectionReceiver: Send + Sync + 'static {
-    async fn recv_from_stew<T: DeserializeOwned + Send + Sync + 'static>(
-        &mut self,
-    ) -> Result<Option<T>, Error>;
+pub trait StewConnectionReceiver<T>: Send + Sync + 'static
+where
+    T: DeserializeOwned + Send + Sync + 'static,
+{
+    async fn recv_from_stew(&mut self) -> Result<Option<T>, Error>;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -67,10 +68,10 @@ pub struct StewClient<S, D> {
 
 impl<S, D> StewClient<S, D>
 where
-    S: StewConnectionSender + Clone,
+    S: StewConnectionSender<StewRpcCall> + Clone,
     D: Send + Sync + 'static,
 {
-    pub fn start<R: StewConnectionReceiver>(
+    pub fn start<R: StewConnectionReceiver<StewRpcMessage>>(
         stew_send: S,
         mut stew_recv: R,
         mut userdata: D,
@@ -83,7 +84,7 @@ where
             let mut stew_send = stew_send.clone();
             async move {
                 loop {
-                    match stew_recv.recv_from_stew::<StewRpcMessage>().await {
+                    match stew_recv.recv_from_stew().await {
                         Ok(Some(StewRpcMessage::FunctionCalled(call))) => {
                             let function = match functions.get(&call.internal_id) {
                                 Some(f) => f,
@@ -109,7 +110,9 @@ where
                         },
                         Ok(Some(StewRpcMessage::InvocationResponse(response))) => {
                             if let Some(sender) = invocations.remove(&response.invocation_id) {
-                                sender.1.send(response.kind).unwrap();
+                                if let Err(err) = sender.1.send(response.kind) {
+                                    tracing::error!("Failed to send invocation response: {err:?}");
+                                }
                             }
                         },
                         Err(err) => {
