@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use futures::{channel::oneshot, future::BoxFuture, Future};
+use futures::{channel::oneshot, future::BoxFuture};
 use semver::{Version, VersionReq};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::rpc_proto::{
     FunctionId, InvocationId, InvocationResponseData, PluginId, StewRpcCall, StewRpcMessage,
@@ -43,23 +44,18 @@ pub enum Error {
     #[error(transparent)]
     InvocationCanceled(#[from] oneshot::Canceled),
     #[error("The invocation failed: {0}")]
-    InvocationFailed(serde_json::Value),
+    InvocationFailed(Value),
     #[error("Received a response to the invocation, but it was of an unexpected kind: {0}")]
-    UnexpectedInvocationResponse(serde_json::Value),
+    UnexpectedInvocationResponse(Value),
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
 }
 
 pub type PluginFn<D> = Box<
-    dyn Fn(
-            &mut D,
-            serde_json::Value,
-        ) -> BoxFuture<'static, Result<serde_json::Value, serde_json::Value>>
-        + Send
-        + Sync
-        + 'static,
+    dyn for<'a> Fn(&'a mut D, Value) -> BoxFuture<'a, Result<Value, Value>> + Send + Sync + 'static,
 >;
 
+#[derive(Clone)]
 pub struct StewClient<S, D> {
     stew_send: S,
     functions: Arc<DashMap<FunctionId, PluginFn<D>>>,
@@ -153,15 +149,17 @@ where
         )
     }
 
-    pub async fn register_fn<F, Fut>(&mut self, name: &str, function: F) -> Result<(), Error>
+    pub async fn register_fn<F>(&mut self, name: &str, function: F) -> Result<(), Error>
     where
-        F: Fn(&mut D, serde_json::Value) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<serde_json::Value, serde_json::Value>> + Send + 'static,
+        F: for<'a> Fn(&'a mut D, Value) -> BoxFuture<'a, Result<Value, Value>>
+            + Send
+            + Sync
+            + 'static,
     {
         let function_id = FunctionId::gen();
         self.functions.insert(
             function_id,
-            Box::new(move |userdata, args| Box::pin(function(userdata, args))),
+            Box::new(move |userdata: &mut D, args| Box::pin(function(userdata, args))),
         );
         self.send_call(StewRpcCall::RegisterFunction {
             fn_name: name.to_string(),

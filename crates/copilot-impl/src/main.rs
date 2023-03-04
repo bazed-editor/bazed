@@ -26,7 +26,7 @@ async fn main() {
     let reader = UnnamedPipeJsonReader::new(reader);
     let _plugin_id: PluginId = PluginId(std::env::args().nth(3).unwrap().parse().unwrap());
 
-    let mut client = StewClient::start(writer, reader, ());
+    let mut client = StewClient::start(writer, reader, String::new());
     tracing::info!("Stew client running");
 
     client
@@ -41,10 +41,14 @@ async fn main() {
     tracing::info!("Sent metadata");
 
     client
-        .register_fn("print", |_, args| async move {
-            let args: String = serde_json::from_value(args).map_err(|e| json!(e.to_string()))?;
-            tracing::info!("print: {args}");
-            Ok(json!(format!("hello, {args}")))
+        .register_fn("print", |x, args| {
+            Box::pin(async move {
+                let args: String =
+                    serde_json::from_value(args).map_err(|e| json!(e.to_string()))?;
+                x.to_string();
+                tracing::info!("print: {args}");
+                Ok(json!(format!("hello, {args}")))
+            })
         })
         .await
         .unwrap();
