@@ -24,3 +24,4 @@ tokio.workspace = true
 tracing.workspace = true
 bazed-stew-interface.workspace = true
 semver.workspace = true
+blocking.workspace = true
