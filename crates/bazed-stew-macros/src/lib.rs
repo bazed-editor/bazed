@@ -59,6 +59,8 @@ pub fn plugin(attrs: TokenStream, input: TokenStream) -> TokenStream {
     let client_impl_name = format_ident!("{}ClientImpl", trait_name);
 
     let plugin_version = args.version;
+    let stew_version_maj = args.stew_version.1;
+    let stew_version_min = args.stew_version.2;
     let plugin_name = args.name;
 
     quote! {
@@ -71,7 +73,7 @@ pub fn plugin(attrs: TokenStream, input: TokenStream) -> TokenStream {
             use super::*;
             use bazed_stew_interface::{
                 stew_rpc::{self, StewConnectionSender, StewConnectionReceiver, StewClient},
-                rpc_proto::{StewRpcCall, StewRpcMessage, FunctionId, PluginId},
+                rpc_proto::{StewRpcCall, StewRpcMessage, FunctionId, PluginId, PluginMetadata},
                 semver,
             };
 
@@ -119,11 +121,20 @@ pub fn plugin(attrs: TokenStream, input: TokenStream) -> TokenStream {
 
             pub mod server {
                 use super::*;
-                pub async fn register_functions<S, D>(client: &mut StewClient<S, D>) -> Result<(), stew_rpc::Error>
+                pub async fn initialize<S, D>(client: &mut StewClient<S, D>) -> Result<(), stew_rpc::Error>
                 where
                     S: StewConnectionSender<StewRpcCall> + Clone + 'static,
                     D: #trait_name + Send + Sync + 'static
                 {
+                    client
+                        .send_call(StewRpcCall::Metadata(PluginMetadata {
+                            api_major: #stew_version_maj,
+                            api_minor: #stew_version_min,
+                            name: #plugin_name.to_string(),
+                            version: #plugin_version.parse().unwrap(),
+                        }))
+                        .await?;
+
                     #(#register_fns)*
                     Ok(())
                 }
@@ -135,8 +146,9 @@ pub fn plugin(attrs: TokenStream, input: TokenStream) -> TokenStream {
 
 #[derive(darling::FromMeta)]
 struct PluginAttr {
-    version: Version,
     name: syn::LitStr,
+    version: syn::LitStr,
+    stew_version: Version,
 }
 
 
