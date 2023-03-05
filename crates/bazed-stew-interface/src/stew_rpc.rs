@@ -43,12 +43,14 @@ pub enum Error {
     Connection(#[from] Box<dyn std::error::Error + Send + Sync>),
     #[error(transparent)]
     InvocationCanceled(#[from] oneshot::Canceled),
-    #[error("The invocation failed: {0}")]
+    #[error("The invocation failed: {}", serde_json::to_string(&0).unwrap())]
     InvocationFailed(Value),
-    #[error("Received a response to the invocation, but it was of an unexpected kind: {0}")]
+    #[error("Received a response to the invocation, but it was of an unexpected kind: {}", serde_json::to_string(&0).unwrap())]
     UnexpectedInvocationResponse(Value),
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
+    #[error("A function considered infallible returned an error anyways: {}", serde_json::to_string(&0).unwrap())]
+    InfallibleFunctionFailed(serde_json::Value),
 }
 
 pub type PluginFn<D> = Box<
@@ -208,6 +210,17 @@ where
         })
         .await?;
         Ok(())
+    }
+
+    pub async fn call_fn_and_await_response_infallible<O: DeserializeOwned>(
+        &mut self,
+        fn_id: FunctionId,
+        args: impl Serialize,
+    ) -> Result<O, Error> {
+        match self.call_fn_and_await_response(fn_id, args).await? {
+            Ok(result) => Ok(result),
+            Err(err) => Err(Error::InfallibleFunctionFailed(err)),
+        }
     }
 
     pub async fn call_fn_and_await_response<O: DeserializeOwned, E: DeserializeOwned>(
