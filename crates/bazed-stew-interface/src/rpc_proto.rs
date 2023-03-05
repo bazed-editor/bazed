@@ -58,10 +58,10 @@ impl InvocationId {
 pub struct PluginMetadata {
     /// The plugin API version expected by the plugin.
     /// A major version bump indicates some non-backwards compatible change.
-    pub api_major: u32,
+    pub api_major: usize,
     /// The plugin API version expected by the plugin.
     /// A minor version bump is backwards compatible.
-    pub api_minor: u32,
+    pub api_minor: usize,
     /// The name of the plugin.
     pub name: String,
     /// The version of this plugin.

@@ -47,6 +47,7 @@ bazed-input-mapper = { path = "crates/bazed-input-mapper", version = "0.0.0" }
 bazed-stew-macros = { path = "crates/bazed-stew-macros", version = "0.0.0" }
 bazed-stew-interface = { path = "crates/bazed-stew-interface", version = "0.0.0" }
 bazed-stew = { path = "crates/bazed-stew", version = "0.0.0" }
+copilot-interface = { path = "crates/copilot-interface", version = "0.0.0" }
 
 [workspace.dependencies.tracing-subscriber]
 version = "0.3.16"

@@ -530,10 +530,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
-name = "copilot"
+name = "copilot-impl"
 version = "0.0.0"
 dependencies = [
+ "async-trait",
  "bazed-stew-interface",
+ "copilot-interface",
  "interprocess",
  "serde_json",
  "tokio",

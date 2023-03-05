@@ -1,73 +1,41 @@
-use std::os::fd::FromRawFd;
-
-use bazed_stew_interface::{
-    ipc_connection::{UnnamedPipeJsonReader, UnnamedPipeJsonWriter},
-    rpc_proto::{PluginId, PluginMetadata, StewRpcCall},
-    stew_rpc::StewClient,
-};
-use interprocess::unnamed_pipe::{UnnamedPipeReader, UnnamedPipeWriter};
-use serde_json::json;
+use bazed_stew_interface::stew_rpc;
+use copilot_interface::Copilot;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{
     prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
 };
 
+struct Plugin;
+
+#[async_trait::async_trait]
+impl copilot_interface::Copilot for Plugin {
+    async fn hello(&mut self, name: String) -> Result<Result<String, ()>, stew_rpc::Error> {
+        tracing::info!("from plugin: Hello, {name}!");
+        Ok(Ok(format!("Hello, {name}!")))
+    }
+}
+
 #[tokio::main]
 async fn main() {
     init_logging();
     tracing::info!("Copilot started");
-    let writer = unsafe {
-        UnnamedPipeWriter::from_raw_fd(std::env::args().nth(1).unwrap().parse().unwrap())
-    };
-    let writer = UnnamedPipeJsonWriter::new(writer);
-    let reader = unsafe {
-        UnnamedPipeReader::from_raw_fd(std::env::args().nth(2).unwrap().parse().unwrap())
-    };
-    let reader = UnnamedPipeJsonReader::new(reader);
-    let _plugin_id: PluginId = PluginId(std::env::args().nth(3).unwrap().parse().unwrap());
+    let plugin = Plugin;
 
-    let mut client = StewClient::start(writer, reader, String::new());
+    let mut client = bazed_stew_interface::init_client(plugin);
     tracing::info!("Stew client running");
 
-    client
-        .send_call(StewRpcCall::Metadata(PluginMetadata {
-            api_major: 1,
-            api_minor: 0,
-            name: "copilot".to_string(),
-            version: "0.1.0".parse().unwrap(),
-        }))
-        .await
-        .unwrap();
-    tracing::info!("Sent metadata");
-
-    client
-        .register_fn("print", |x, args| {
-            Box::pin(async move {
-                let args: String =
-                    serde_json::from_value(args).map_err(|e| json!(e.to_string()))?;
-                x.to_string();
-                tracing::info!("print: {args}");
-                Ok(json!(format!("hello, {args}")))
-            })
-        })
+    copilot_interface::server::initialize(&mut client)
         .await
         .unwrap();
 
-    let copilot = client
-        .load_plugin("copilot".to_string(), "*".parse().unwrap())
-        .await
-        .unwrap();
-    tracing::info!("copilot: {copilot:?}");
-    let print_fn = client
-        .get_fn(copilot.plugin_id, "print".to_string())
-        .await
-        .unwrap();
-    tracing::info!("Got function: {print_fn}");
+    tracing::info!("Initialized");
 
-    let result: Result<String, serde_json::Value> = client
-        .call_fn_and_await_response(print_fn, json!("foo"))
+    let mut copilot = copilot_interface::CopilotClientImpl::load(client.clone())
         .await
         .unwrap();
+
+    let result = copilot.hello("foo".to_string()).await.unwrap().unwrap();
+
     tracing::info!("Result: {result:?}");
 
     loop {
