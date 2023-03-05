@@ -19,20 +19,26 @@ async fn main() -> Result<()> {
 
     let mut run_frontend = true;
     let mut edited_file = None;
+    let mut run_stew_demo = false;
     for arg in std::env::args().skip(1) {
         if arg == "--no-frontend" {
             run_frontend = false;
+        } else if arg == "--run-stew-demo" {
+            run_stew_demo = true;
         } else {
             edited_file = Some(arg);
         }
     }
 
-    bazed_stew::run_stew(vec![concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../target/debug"
-    )
-    .into()])
-    .await;
+    if run_stew_demo {
+        bazed_stew::run_stew(vec![concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../target/debug"
+        )
+        .into()])
+        .await;
+        return Ok(());
+    }
 
     tokio::spawn(async {
         bazed_core::app::start("127.0.0.1:6969", edited_file.map(Into::into))
