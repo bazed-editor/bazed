@@ -36,7 +36,7 @@ pub fn plugin(attrs: TokenStream, input: TokenStream) -> TokenStream {
 
     let trait_name = &trayt.ident;
 
-    let client_impl_name = format_ident!("{}ClientImpl", trait_name);
+    let client_impl_name = format_ident!("{}Client", trait_name);
     let client_impl = make_client_impl(&args, &client_impl_name, &functions);
     let server_module = make_server_module(&args, trait_name, &functions);
 
@@ -45,14 +45,14 @@ pub fn plugin(attrs: TokenStream, input: TokenStream) -> TokenStream {
 
         pub use __internal::server;
         pub use __internal::#client_impl_name;
-
         mod __internal {
             use super::*;
             use bazed_stew_interface::{
-                stew_rpc::{self, StewConnectionSender, StewConnectionReceiver, StewClient},
+                stew_rpc::{self, StewConnectionSender, StewConnectionReceiver, StewSession},
                 rpc_proto::{StewRpcCall, StewRpcMessage, FunctionId, PluginId, PluginMetadata},
                 semver,
             };
+
             #server_module
             #client_impl
 
@@ -86,9 +86,8 @@ fn make_server_module(
     quote! {
         pub mod server {
             use super::*;
-            pub async fn initialize<S, D>(client: &mut StewClient<S, D>) -> Result<(), stew_rpc::Error>
+            pub async fn initialize<D>(client: &mut StewSession<D>) -> Result<(), stew_rpc::Error>
             where
-                S: StewConnectionSender<StewRpcCall> + Clone + 'static,
                 D: #trait_name + Send + Sync + 'static
             {
                 client.send_call(StewRpcCall::Metadata(#metadata)).await?;
@@ -119,29 +118,28 @@ fn make_client_impl(
     });
 
     quote! {
-        pub struct #client_impl_name<S, D> {
-            client: StewClient<S, D>,
+        pub struct #client_impl_name<D> {
+            client: StewSession<D>,
             functions: Vec<FunctionId>,
         }
 
-        impl <S, D> #client_impl_name<S, D>
+        impl <D> #client_impl_name<D>
         where
-            S: StewConnectionSender<StewRpcCall> + Clone + 'static,
             D: Send + Sync + 'static
         {
-            pub async fn load(mut client: StewClient<S, D>) -> Result<Self, stew_rpc::Error> {
+            pub async fn load(mut client: StewSession<D>) -> Result<Self, stew_rpc::Error> {
                 Self::load_at(client, #plugin_version.parse().unwrap())
                     .await
             }
 
-            pub async fn load_at(mut client: StewClient<S, D>, version: semver::VersionReq) -> Result<Self, stew_rpc::Error> {
+            pub async fn load_at(mut client: StewSession<D>, version: semver::VersionReq) -> Result<Self, stew_rpc::Error> {
                 let plugin_info = client
                     .load_plugin(#plugin_name.to_string(), version)
                     .await?;
                 Self::initialize(client, plugin_info.plugin_id).await
             }
 
-            pub async fn initialize(mut client: StewClient<S, D>, plugin_id: PluginId) -> Result<Self, stew_rpc::Error> {
+            pub async fn initialize(mut client: StewSession<D>, plugin_id: PluginId) -> Result<Self, stew_rpc::Error> {
                 let functions = vec![ #(#client_get_fns),* ];
                 Ok(Self { client, functions })
             }
