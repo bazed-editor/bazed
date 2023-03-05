@@ -1,47 +1,50 @@
-use bazed_stew_interface::stew_rpc;
-use copilot_interface::Copilot;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{
     prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
 };
 
-struct Plugin;
+struct Plugin {
+    counter: usize,
+}
 
 #[async_trait::async_trait]
 impl copilot_interface::Copilot for Plugin {
-    async fn hello(&mut self, name: String) -> Result<String, stew_rpc::Error> {
-        tracing::info!("from plugin: Hello, {name}!");
-        Ok(format!("Hello, {name}!"))
+    async fn plus(&mut self, n: usize) {
+        self.counter += n;
     }
-    async fn try_hello(&mut self, name: String) -> Result<Result<String, usize>, stew_rpc::Error> {
-        tracing::info!("from plugin: Hello, {name}!");
-        Ok(Ok(format!("Hello, {name}!")))
+    async fn minus(&mut self, n: usize) -> Result<(), String> {
+        if self.counter < n {
+            Err("Can't subtract more than the current value".to_string())
+        } else {
+            self.counter -= n;
+            Ok(())
+        }
+    }
+    async fn value(&mut self) -> usize {
+        self.counter
     }
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> color_eyre::Result<()> {
     init_logging();
     tracing::info!("Copilot started");
-    let plugin = Plugin;
+    let plugin = Plugin { counter: 0 };
 
     let mut client = bazed_stew_interface::init_client(plugin);
     tracing::info!("Stew client running");
 
-    copilot_interface::server::initialize(&mut client)
-        .await
-        .unwrap();
-
+    copilot_interface::server::initialize(&mut client).await?;
     tracing::info!("Initialized");
 
-    let mut copilot = copilot_interface::CopilotClientImpl::load(client.clone())
-        .await
-        .unwrap();
+    let mut copilot = copilot_interface::CopilotClientImpl::load(client.clone()).await?;
 
-    let result = copilot.hello("foo".to_string()).await.unwrap();
-    tracing::info!("Result hello: {result:?}");
-    let result = copilot.try_hello("foo".to_string()).await.unwrap().unwrap();
-    tracing::info!("Result try_hello: {result:?}");
+    copilot.plus(5).await?;
+    copilot.plus(5).await?;
+    let result = copilot.value().await?;
+    tracing::info!("Result value: {result:?}");
+    let result = copilot.minus(15).await?;
+    tracing::info!("Result minus: {result:?}");
 
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -49,6 +52,7 @@ async fn main() {
 }
 
 fn init_logging() {
+    color_eyre::install().unwrap();
     let fmt_layer = tracing_subscriber::fmt::layer().with_target(true).pretty();
     let filter_layer = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("debug"))
