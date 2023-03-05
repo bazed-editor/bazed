@@ -1,3 +1,7 @@
+//! Stew connection channels ([`StewConnectionSender`], [`StewConnectionReceiver`]) based on
+//! IPC through unnamed pipes, using
+//! [interprocess::unnamed_pipe](https://docs.rs/interprocess/latest/interprocess/unnamed_pipe/index.html).
+
 use blocking::Unblock;
 use futures::{channel::mpsc::UnboundedSender, AsyncWriteExt, StreamExt};
 use interprocess::unnamed_pipe::{UnnamedPipeReader, UnnamedPipeWriter};

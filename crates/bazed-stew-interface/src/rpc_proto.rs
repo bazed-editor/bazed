@@ -116,7 +116,7 @@ pub enum StewRpcCall {
     },
 
     /// Load a plugin from the load path.
-    /// Should result in a [StewRpcMessage::PluginLoaded] message.
+    /// Should result in a [InvocationResponseData::PluginLoaded] message.
     LoadPlugin {
         /// Name of the plugin to load
         name: String,
