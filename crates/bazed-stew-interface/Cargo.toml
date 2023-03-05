@@ -21,6 +21,7 @@ interprocess.workspace = true
 semver.workspace = true
 blocking.workspace = true
 derivative.workspace = true
+async-channel = "1.8.0"
 dyn-clone = "1.0.11"
 
 

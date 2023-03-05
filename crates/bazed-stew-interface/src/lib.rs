@@ -10,9 +10,9 @@ use interprocess::unnamed_pipe::{UnnamedPipeReader, UnnamedPipeWriter};
 use ipc_connection::{UnnamedPipeJsonReader, UnnamedPipeJsonWriter};
 use rpc_proto::PluginId;
 pub use semver;
-use stew_rpc::StewSession;
+use stew_rpc::{StewSession, StewSessionBase};
 
-pub fn init_client<D: Send + Sync + 'static>(state: D) -> StewSession<D> {
+pub fn init_session() -> StewSessionBase {
     let writer_fd = std::env::args().nth(1).unwrap().parse().unwrap();
     let writer = unsafe { UnnamedPipeWriter::from_raw_fd(writer_fd) };
     let writer = UnnamedPipeJsonWriter::new(writer);
@@ -22,6 +22,9 @@ pub fn init_client<D: Send + Sync + 'static>(state: D) -> StewSession<D> {
     let reader = UnnamedPipeJsonReader::new(reader);
 
     let _plugin_id: PluginId = PluginId(std::env::args().nth(3).unwrap().parse().unwrap());
+    StewSessionBase::start(writer, reader)
+}
 
-    StewSession::start(writer, reader, state)
+pub fn init_session_with_state<D: Send + Sync + 'static>(userdata: D) -> StewSession<D> {
+    StewSession::start(init_session(), userdata)
 }

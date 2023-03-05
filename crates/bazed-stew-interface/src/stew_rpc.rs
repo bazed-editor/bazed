@@ -7,9 +7,11 @@ use futures::{channel::oneshot, future::BoxFuture};
 use semver::{Version, VersionReq};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
+use tracing::Instrument;
 
 use crate::rpc_proto::{
-    FunctionId, InvocationId, InvocationResponseData, PluginId, StewRpcCall, StewRpcMessage,
+    FunctionCalled, FunctionId, InvocationId, InvocationResponseData, PluginId, StewRpcCall,
+    StewRpcMessage,
 };
 
 macro_rules! expect_invocation_result {
@@ -56,13 +58,18 @@ pub enum Error {
     InfallibleFunctionFailed(serde_json::Value),
 }
 
-pub type PluginFn<D> = Box<
+/// A method exposed by a plugin
+type PluginFn<D> = Box<
     dyn for<'a> Fn(&'a mut D, Value) -> BoxFuture<'a, Result<Value, Value>> + Send + Sync + 'static,
 >;
 
+/// Base session type for a connection to the main stew system.
+///
+/// This can be cloned to get another handle to the same session.
 pub struct StewSessionBase {
     stew_send: Box<dyn StewConnectionSender<StewRpcCall>>,
     invocations: Arc<DashMap<InvocationId, oneshot::Sender<InvocationResponseData>>>,
+    function_call_recv: async_channel::Receiver<FunctionCalled>,
 }
 
 impl Clone for StewSessionBase {
@@ -70,10 +77,16 @@ impl Clone for StewSessionBase {
         Self {
             stew_send: dyn_clone::clone_box(&*self.stew_send),
             invocations: self.invocations.clone(),
+            function_call_recv: self.function_call_recv.clone(),
         }
     }
 }
 
+/// A full stew session, wrapping the invocation and function-call event loop.
+/// Registered functions will be stored as callbacks in the session,
+/// and will be invoked when the corresponding [`StewRpcMessage::FunctionCalled`]-message is received.
+///
+/// This can be cloned to get another handle to the same session.
 #[derive(derive_more::Deref, derive_more::DerefMut, Derivative)]
 #[derivative(Clone)]
 pub struct StewSession<D> {
@@ -87,67 +100,35 @@ impl<D> StewSession<D>
 where
     D: Send + Sync + 'static,
 {
-    pub fn start<S, R>(stew_send: S, mut stew_recv: R, mut userdata: D) -> Self
-    where
-        S: StewConnectionSender<StewRpcCall>,
-        R: StewConnectionReceiver<StewRpcMessage>,
-    {
-        let invocations = Arc::new(DashMap::<_, oneshot::Sender<_>>::new());
+    pub fn start(base: StewSessionBase, mut userdata: D) -> Self {
         let functions = Arc::new(DashMap::new());
+        let mut stew_send = dyn_clone::clone_box(&*base.stew_send);
+        let function_call_recv = base.function_call_recv.clone();
         tokio::spawn({
-            let invocations = invocations.clone();
             let functions = functions.clone();
-            let mut stew_send = dyn_clone::clone_box(&stew_send);
             async move {
-                loop {
-                    match stew_recv.recv_from_stew().await {
-                        Ok(Some(StewRpcMessage::FunctionCalled(call))) => {
-                            let function = match functions.get(&call.internal_id) {
-                                Some(f) => f,
-                                None => {
-                                    tracing::error!("Function not found");
-                                    continue;
-                                },
-                            };
-                            let function: &PluginFn<D> = &function;
-                            let result = function(&mut userdata, call.args).await;
-                            if let Some(invocation_id) = call.invocation_id {
-                                let result = stew_send
-                                    .send_to_stew(StewRpcCall::FunctionReturn {
-                                        caller_id: call.caller_id,
-                                        return_value: result.into(),
-                                        invocation_id,
-                                    })
-                                    .await;
-                                if let Err(result) = result {
-                                    tracing::error!("{:?}", result);
-                                }
-                            }
-                        },
-                        Ok(Some(StewRpcMessage::InvocationResponse(response))) => {
-                            if let Some(sender) = invocations.remove(&response.invocation_id) {
-                                if let Err(err) = sender.1.send(response.kind) {
-                                    tracing::error!("Failed to send invocation response: {err:?}");
-                                }
-                            }
-                        },
-                        Err(err) => {
-                            tracing::error!("serde error: {:?}", err);
-                        },
-                        Ok(None) => {
-                            tracing::error!("Connection closed");
-                            break;
-                        },
+                while let Ok(call) = function_call_recv.recv().await {
+                    let Some(function) = functions.get(&call.internal_id) else {
+                        tracing::error!("Function not found");
+                        continue;
+                    };
+                    let function: &PluginFn<D> = &function;
+                    let result = function(&mut userdata, call.args).await;
+                    if let Some(invocation_id) = call.invocation_id {
+                        let result = stew_send
+                            .send_to_stew(StewRpcCall::FunctionReturn {
+                                caller_id: call.caller_id,
+                                return_value: result.into(),
+                                invocation_id,
+                            })
+                            .await;
+                        if let Err(result) = result {
+                            tracing::error!("{:?}", result);
+                        }
                     }
                 }
             }
         });
-
-        let base = StewSessionBase {
-            stew_send: Box::new(stew_send),
-            invocations,
-        };
-
         Self { base, functions }
     }
 
@@ -173,6 +154,51 @@ where
 }
 
 impl StewSessionBase {
+    #[tracing::instrument(skip_all)]
+    pub fn start<S, R>(stew_send: S, mut stew_recv: R) -> Self
+    where
+        S: StewConnectionSender<StewRpcCall>,
+        R: StewConnectionReceiver<StewRpcMessage>,
+    {
+        let (function_call_send, function_call_recv) = async_channel::unbounded();
+        let invocations = Arc::new(DashMap::<_, oneshot::Sender<_>>::new());
+        tokio::spawn({
+            let invocations = invocations.clone();
+            async move {
+                loop {
+                    match stew_recv.recv_from_stew().await {
+                        Ok(Some(StewRpcMessage::FunctionCalled(call))) => {
+                            if let Err(err) = function_call_send.send(call).await {
+                                tracing::error!("Failed to forward function call event: {err:?}");
+                            }
+                        },
+                        Ok(Some(StewRpcMessage::InvocationResponse(response))) => {
+                            if let Some(sender) = invocations.remove(&response.invocation_id) {
+                                if let Err(err) = sender.1.send(response.kind) {
+                                    tracing::error!("Failed to send invocation response: {err:?}");
+                                }
+                            }
+                        },
+                        Err(err) => {
+                            tracing::error!("Received error from stew: {:?}", err);
+                        },
+                        Ok(None) => {
+                            tracing::error!("Connection closed");
+                            break;
+                        },
+                    }
+                }
+            }
+            .in_current_span()
+        });
+
+        Self {
+            stew_send: Box::new(stew_send),
+            function_call_recv,
+            invocations,
+        }
+    }
+
     pub async fn load_plugin(
         &mut self,
         name: String,

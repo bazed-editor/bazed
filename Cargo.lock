@@ -232,6 +232,7 @@ dependencies = [
 name = "bazed-stew-interface"
 version = "0.0.0"
 dependencies = [
+ "async-channel",
  "async-trait",
  "bazed-stew-macros",
  "blocking",
