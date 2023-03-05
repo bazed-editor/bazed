@@ -20,6 +20,7 @@ tracing.workspace = true
 interprocess.workspace = true
 semver.workspace = true
 blocking.workspace = true
+dyn-clone = "1.0.11"
 
 
 bazed-stew-macros.workspace = true

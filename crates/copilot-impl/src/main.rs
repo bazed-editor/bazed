@@ -1,3 +1,4 @@
+use copilot_interface::CopilotClient;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{
     prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
@@ -9,6 +10,7 @@ struct Plugin {
 
 #[async_trait::async_trait]
 impl copilot_interface::Copilot for Plugin {
+    //TODO make this not round-trip
     async fn plus(&mut self, n: usize) {
         self.counter += n;
     }
@@ -31,19 +33,19 @@ async fn main() -> color_eyre::Result<()> {
     tracing::info!("Copilot started");
     let plugin = Plugin { counter: 0 };
 
-    let mut client = bazed_stew_interface::init_client(plugin);
+    let mut stew_client = bazed_stew_interface::init_client(plugin);
     tracing::info!("Stew client running");
 
-    copilot_interface::server::initialize(&mut client).await?;
+    copilot_interface::server::initialize(&mut stew_client).await?;
     tracing::info!("Initialized");
 
-    let mut copilot = copilot_interface::CopilotClientImpl::load(client.clone()).await?;
+    let mut other_plugin: CopilotClient<Plugin> = CopilotClient::load(stew_client.clone()).await?;
 
-    copilot.plus(5).await?;
-    copilot.plus(5).await?;
-    let result = copilot.value().await?;
+    other_plugin.plus(5).await?;
+    other_plugin.plus(5).await?;
+    let result = other_plugin.value().await?;
     tracing::info!("Result value: {result:?}");
-    let result = copilot.minus(15).await?;
+    let result = other_plugin.minus(15).await?;
     tracing::info!("Result minus: {result:?}");
 
     loop {
