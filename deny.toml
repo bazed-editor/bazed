@@ -7,6 +7,7 @@ vulnerability = "deny"
 yanked = "deny"
 ignore = [
     "RUSTSEC-2022-0048", # xml-rs
+    "RUSTSEC-2023-0018" # tauri -> remove_dir_all
 ]
 
 [licenses]
@@ -50,6 +51,7 @@ skip = [
     { name = "windows_i686_msvc", version = "0.39.0" },
     { name = "windows_x86_64_gnu", version = "0.39.0" },
     { name = "windows_x86_64_msvc", version = "0.39.0" },
+    { name = "windows-sys", version = "0.42.0" }
 ]
 
 [sources]
