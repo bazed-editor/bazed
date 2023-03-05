@@ -1,5 +1,6 @@
 [workspace]
 members = [ "crates/*" ]
+default-members = ["crates/bazed"]
 
 
 [workspace.package]
