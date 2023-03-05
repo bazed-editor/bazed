@@ -118,6 +118,7 @@ fn make_client_impl(
     });
 
     quote! {
+        #[derive(Clone)]
         pub struct #client_impl_name {
             client: StewSessionBase,
             functions: Vec<FunctionId>,
