@@ -535,6 +535,7 @@ version = "0.0.0"
 dependencies = [
  "async-trait",
  "bazed-stew-interface",
+ "color-eyre",
  "copilot-interface",
  "interprocess",
  "serde_json",
