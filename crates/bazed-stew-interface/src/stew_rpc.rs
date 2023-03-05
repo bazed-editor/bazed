@@ -212,6 +212,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, args))]
     pub async fn call_fn_and_await_response_infallible<O: DeserializeOwned>(
         &mut self,
         fn_id: FunctionId,
@@ -223,6 +224,7 @@ where
         }
     }
 
+    #[tracing::instrument(skip(self, args))]
     pub async fn call_fn_and_await_response<O: DeserializeOwned, E: DeserializeOwned>(
         &mut self,
         fn_id: FunctionId,
@@ -242,6 +244,7 @@ where
         Ok(result.parse_into_result()?)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn await_invocation_result(
         &self,
         invocation_id: InvocationId,
@@ -260,6 +263,7 @@ where
             .map_err(|x| Error::Connection(Box::new(x)))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn send_call(&mut self, msg: StewRpcCall) -> Result<(), Error> {
         self.stew_send
             .send_to_stew(msg)

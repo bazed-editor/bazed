@@ -22,3 +22,4 @@ tracing-subscriber.workspace = true
 tracing-error.workspace = true
 
 copilot-interface.workspace = true
+color-eyre.workspace = true
