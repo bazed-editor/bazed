@@ -1,11 +1,14 @@
-#![feature(iter_intersperse)]
+#![feature(iter_intersperse, proc_macro_def_site)]
 
 use darling::{FromMeta, ToTokens};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use proc_macro_error::abort;
+use proc_macro_error::{abort, emit_error};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, spanned::Spanned, TraitItemMethod};
+use syn::{parse_macro_input, parse_quote, spanned::Spanned, TraitItemMethod};
+use utils::{returns_nothing, returns_result, wrap_return_type};
+
+mod utils;
 
 #[proc_macro_attribute]
 #[proc_macro_error::proc_macro_error]
@@ -30,7 +33,7 @@ pub fn plugin(attrs: TokenStream, input: TokenStream) -> TokenStream {
                 }
                 x
             },
-            _ => proc_macro_error::abort!(x.span(), "Only methods are allowed in a plugin trait"),
+            _ => abort!(x.span(), "Only methods are allowed in a plugin trait"),
         })
         .collect::<Vec<_>>();
 
@@ -40,17 +43,19 @@ pub fn plugin(attrs: TokenStream, input: TokenStream) -> TokenStream {
     let client_impl = make_client_impl(&args, &client_impl_name, &functions);
     let server_module = make_server_module(&args, trait_name, &functions);
 
+    let internal_ident = syn::Ident::new("internal", proc_macro::Span::def_site().into());
+
     quote! {
         #trayt
 
-        pub use __internal::server;
-        pub use __internal::#client_impl_name;
-        mod __internal {
+        pub use #internal_ident::server;
+        pub use #internal_ident::#client_impl_name;
+        mod #internal_ident {
             use super::*;
             use bazed_stew_interface::{
                 stew_rpc::{self, StewConnectionSender, StewConnectionReceiver, StewSession, StewSessionBase},
                 rpc_proto::{StewRpcCall, StewRpcMessage, FunctionId, PluginId, PluginMetadata},
-                semver,
+                re_exports
             };
 
             #server_module
@@ -81,11 +86,16 @@ fn make_server_module(
     trait_name: &syn::Ident,
     functions: &[&TraitItemMethod],
 ) -> proc_macro2::TokenStream {
+    let trait_name_str = trait_name.to_string();
     let register_fns = functions.iter().map(|x| make_register_fn(x));
     let metadata = make_metadata_struct_instance(args);
     quote! {
         pub mod server {
             use super::*;
+            #[doc = ::std::concat!(
+                "Register this plugin with the given StewSession by sending Metadata and registering all functions.\n",
+                "This function _must_ be called before using your [`", #trait_name_str, "`]-instance"
+            )]
             pub async fn initialize<D>(client: &mut StewSession<D>) -> Result<(), stew_rpc::Error>
             where
                 D: #trait_name + Send + Sync + 'static
@@ -130,7 +140,10 @@ fn make_client_impl(
                     .await
             }
 
-            pub async fn load_at(mut client: StewSessionBase, version: semver::VersionReq) -> Result<Self, stew_rpc::Error> {
+            pub async fn load_at(
+                mut client: StewSessionBase,
+                version: re_exports::semver::VersionReq
+            ) -> Result<Self, stew_rpc::Error> {
                 let plugin_info = client
                     .load_plugin(#plugin_name.to_string(), version)
                     .await?;
@@ -148,20 +161,6 @@ fn make_client_impl(
     }
 }
 
-fn wrap_return_type(
-    mut sig: syn::Signature,
-    wrap: impl FnOnce(Box<syn::Type>) -> syn::Type,
-) -> syn::Signature {
-    sig.output = match sig.output {
-        syn::ReturnType::Default => syn::ReturnType::Type(
-            syn::Token![->](Span::call_site()),
-            Box::new(wrap(syn::parse_quote!(()))),
-        ),
-        syn::ReturnType::Type(tok, old) => syn::ReturnType::Type(tok, Box::new(wrap(old))),
-    };
-    sig
-}
-
 #[derive(darling::FromMeta)]
 struct PluginAttr {
     name: syn::LitStr,
@@ -176,7 +175,7 @@ fn make_client_impl_fn(n: usize, mut function: TraitItemMethod) -> proc_macro2::
 
     function.sig = wrap_return_type(
         function.sig,
-        |old| syn::parse_quote!(::std::result::Result<#old, stew_rpc::Error>),
+        |old| parse_quote!(::std::result::Result<#old, ::bazed_stew_interface::stew_rpc::Error>),
     );
     let inputs = &function.sig.inputs;
     let args: Vec<_> = inputs
@@ -189,10 +188,8 @@ fn make_client_impl_fn(n: usize, mut function: TraitItemMethod) -> proc_macro2::
 
     let arg_names = args.iter().map(|x| match &*x.pat {
         syn::Pat::Ident(x) => Some(x),
-        _ => proc_macro_error::abort!(x.pat.span(), "Expected identifier"),
+        _ => abort!(x.pat.span(), "Expected identifier"),
     });
-
-    let function_sig = &function.sig;
 
     let call_fn_line = if returns_nothing {
         quote! { self.client.call_fn_ignore_response(self.functions[#n], args).await }
@@ -207,7 +204,9 @@ fn make_client_impl_fn(n: usize, mut function: TraitItemMethod) -> proc_macro2::
         }
     };
 
+    let function_sig = &function.sig;
     let attrs = &function.attrs;
+
     quote! {
         #[tracing::instrument(skip(self))]
         #(#attrs)*
@@ -217,32 +216,6 @@ fn make_client_impl_fn(n: usize, mut function: TraitItemMethod) -> proc_macro2::
             let args = Args { #(#arg_names),* };
             #call_fn_line
         }
-    }
-}
-
-fn returns_nothing(sig: &syn::Signature) -> bool {
-    match &sig.output {
-        syn::ReturnType::Default => true,
-        syn::ReturnType::Type(_, ty) => match &**ty {
-            syn::Type::Path(p) => {
-                let path = &p.path;
-                path.segments.len() == 1 && path.segments[0].ident == "()"
-            },
-            _ => false,
-        },
-    }
-}
-
-fn returns_result(sig: &syn::Signature) -> bool {
-    match &sig.output {
-        syn::ReturnType::Default => false,
-        syn::ReturnType::Type(_, ty) => match &**ty {
-            syn::Type::Path(p) => {
-                let path = &p.path;
-                path.segments.len() == 1 && path.segments[0].ident == "Result"
-            },
-            _ => false,
-        },
     }
 }
 
@@ -258,25 +231,18 @@ fn make_register_fn(function: &TraitItemMethod) -> proc_macro2::TokenStream {
             syn::FnArg::Typed(x) => Some(x),
         })
         .collect();
-    let arg_names: Vec<_> = args
-        .iter()
-        .map(|x| match &*x.pat {
-            syn::Pat::Ident(x) => Some(x),
-            _ => proc_macro_error::abort!(x.pat.span(), "Expected identifier"),
-        })
-        .collect();
+    let arg_names = args.iter().map(|x| match &*x.pat {
+        syn::Pat::Ident(x) => Some(x),
+        _ => abort!(x.pat.span(), "Expected identifier"),
+    });
 
     let return_code = if returns_result(&function.sig) {
-        quote! {
-            match result {
-                Ok(x) => Ok(serde_json::to_value(x).unwrap()),
-                Err(x) => Err(serde_json::to_value(x).unwrap()),
-            }
-        }
+        quote!(match result {
+            Ok(x) => Ok(serde_json::to_value(x).unwrap()),
+            Err(x) => Err(serde_json::to_value(x).unwrap()),
+        })
     } else {
-        quote! {
-            Ok(serde_json::to_value(result).unwrap())
-        }
+        quote!(Ok(serde_json::to_value(result).unwrap()))
     };
 
     quote! {{
@@ -304,17 +270,27 @@ impl ToTokens for Version {
 impl darling::FromMeta for Version {
     fn from_value(version: &syn::Lit) -> darling::Result<Self> {
         let version = match version {
-            syn::Lit::Str(x) => x,
-            _ => abort!(version, "Version must be formatted as \"<major>.<minor>\"."),
+            syn::Lit::Str(x) => x.clone(),
+            _ => {
+                emit_error!(version, "Version must be formatted as \"<major>.<minor>\".");
+                syn::LitStr::new("999.999", version.span())
+            },
         };
         if let Some((major, minor)) = version.value().split_once('.') {
             match (major.parse(), minor.parse()) {
                 (Ok(major), Ok(minor)) => Ok(Version(version.span(), major, minor)),
-                (Err(_), _) => abort!(version, "Malformed major version, must be an integer"),
-                (_, Err(_)) => abort!(version, "Malformed minor version, must be an integer"),
+                (Err(e), _) => {
+                    emit_error!(version, "Malformed major version, must be an integer"; cause = format!("{e}"););
+                    Ok(Version(version.span(), 999, 999))
+                },
+                (_, Err(e)) => {
+                    emit_error!(version, "Malformed minor version, must be an integer"; cause = format!("{e}"););
+                    Ok(Version(version.span(), 999, 999))
+                },
             }
         } else {
-            abort!(version, "Version must be formatted as \"<major>.<minor>\".");
+            emit_error!(version, "Version must be formatted as \"<major>.<minor>\".");
+            Ok(Version(version.span(), 999, 999))
         }
     }
 }

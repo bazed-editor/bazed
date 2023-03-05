@@ -9,8 +9,11 @@ use std::os::fd::FromRawFd;
 use interprocess::unnamed_pipe::{UnnamedPipeReader, UnnamedPipeWriter};
 use ipc_connection::{UnnamedPipeJsonReader, UnnamedPipeJsonWriter};
 use rpc_proto::PluginId;
-pub use semver;
 use stew_rpc::{StewSession, StewSessionBase};
+
+pub mod re_exports {
+    pub use semver;
+}
 
 pub fn init_session() -> StewSessionBase {
     let writer_fd = std::env::args().nth(1).unwrap().parse().unwrap();
