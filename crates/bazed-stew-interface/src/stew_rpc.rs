@@ -55,11 +55,20 @@ pub type PluginFn<D> = Box<
     dyn for<'a> Fn(&'a mut D, Value) -> BoxFuture<'a, Result<Value, Value>> + Send + Sync + 'static,
 >;
 
-#[derive(Clone)]
 pub struct StewClient<S, D> {
     stew_send: S,
     functions: Arc<DashMap<FunctionId, PluginFn<D>>>,
     invocations: Arc<DashMap<InvocationId, oneshot::Sender<InvocationResponseData>>>,
+}
+
+impl<S: Clone, D> Clone for StewClient<S, D> {
+    fn clone(&self) -> Self {
+        Self {
+            stew_send: self.stew_send.clone(),
+            functions: self.functions.clone(),
+            invocations: self.invocations.clone(),
+        }
+    }
 }
 
 impl<S, D> StewClient<S, D>

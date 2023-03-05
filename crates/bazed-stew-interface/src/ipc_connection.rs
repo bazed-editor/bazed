@@ -6,8 +6,13 @@ use serde_json::{de::IoRead, StreamDeserializer};
 
 use crate::stew_rpc::{self, StewConnectionReceiver, StewConnectionSender};
 
-#[derive(Clone)]
 pub struct UnnamedPipeJsonWriter<T>(UnboundedSender<T>);
+
+impl<T> Clone for UnnamedPipeJsonWriter<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 impl<T> UnnamedPipeJsonWriter<T>
 where
