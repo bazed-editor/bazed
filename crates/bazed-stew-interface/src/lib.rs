@@ -3,3 +3,5 @@
 pub mod ipc_connection;
 pub mod rpc_proto;
 pub mod stew_rpc;
+
+pub use semver;

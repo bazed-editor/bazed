@@ -3,25 +3,19 @@ use bazed_stew_interface::{
     stew_rpc::{self, StewClient, StewConnectionSender},
 };
 
-#[bazed_stew_macros::plugin]
+#[bazed_stew_macros::plugin(name = "copilot", version = "0.1")]
 #[async_trait::async_trait]
 pub trait Copilot {
     async fn hello(&mut self, name: String) -> Result<String, ()>;
 }
 
 // some-other-plugin-impl
-pub async fn foo<S, D>(mut client: StewClient<S, D>)
+pub async fn foo<S, D>(client: StewClient<S, D>)
 where
     S: StewConnectionSender<StewRpcCall> + Clone + 'static,
     D: Send + Sync + 'static,
 {
-    let copilot = client
-        .load_plugin("copilot".to_string(), "*".parse().unwrap())
-        .await
-        .unwrap();
-    let mut copilot = CopilotClientImpl::initialize(client, copilot.plugin_id)
-        .await
-        .unwrap();
+    let mut copilot = CopilotClientImpl::load(client).await.unwrap();
     copilot.hello("foo".to_string()).await.unwrap().unwrap();
 }
 
@@ -34,7 +28,7 @@ impl CopilotImpl {
     where
         S: StewConnectionSender<StewRpcCall> + Clone + 'static,
     {
-        register_functions(client).await
+        server::register_functions(client).await
     }
 }
 #[async_trait::async_trait]

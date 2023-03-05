@@ -1,5 +1,6 @@
 #![feature(iter_intersperse)]
 
+use darling::{FromMeta, ToTokens};
 use proc_macro::TokenStream;
 use proc_macro2::{Literal, Span};
 use proc_macro_error::abort;
@@ -8,7 +9,13 @@ use syn::{bracketed, parse::Parse, parse_macro_input, spanned::Spanned, TraitIte
 
 #[proc_macro_attribute]
 #[proc_macro_error::proc_macro_error]
-pub fn plugin(_attrs: TokenStream, input: TokenStream) -> TokenStream {
+pub fn plugin(attrs: TokenStream, input: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(attrs as syn::AttributeArgs);
+    let args = match PluginAttr::from_list(&args) {
+        Ok(v) => v,
+        Err(e) => { return TokenStream::from(e.write_errors()); }
+    };
+
     let mut trayt = parse_macro_input!(input as syn::ItemTrait);
 
     let functions = trayt
@@ -51,17 +58,21 @@ pub fn plugin(_attrs: TokenStream, input: TokenStream) -> TokenStream {
 
     let client_impl_name = format_ident!("{}ClientImpl", trait_name);
 
+    let plugin_version = args.version;
+    let plugin_name = args.name;
+
     quote! {
         #trayt
 
-        pub use __internal::register_functions;
+        pub use __internal::server;
         pub use __internal::#client_impl_name;
 
         mod __internal {
             use super::*;
             use bazed_stew_interface::{
                 stew_rpc::{self, StewConnectionSender, StewConnectionReceiver, StewClient},
-                rpc_proto::{StewRpcCall, StewRpcMessage, FunctionId, PluginId}
+                rpc_proto::{StewRpcCall, StewRpcMessage, FunctionId, PluginId},
+                semver,
             };
 
             pub struct #client_impl_name<S, D> {
@@ -74,6 +85,18 @@ pub fn plugin(_attrs: TokenStream, input: TokenStream) -> TokenStream {
                 S: StewConnectionSender<StewRpcCall> + Clone + 'static,
                 D: Send + Sync + 'static
             {
+                pub async fn load(mut client: StewClient<S, D>) -> Result<Self, stew_rpc::Error> {
+                    Self::load_at(client, #plugin_version.parse().unwrap())
+                        .await
+                }
+
+                pub async fn load_at(mut client: StewClient<S, D>, version: semver::VersionReq) -> Result<Self, stew_rpc::Error> {
+                    let plugin_info = client
+                        .load_plugin(#plugin_name.to_string(), version)
+                        .await?;
+                    Self::initialize(client, plugin_info.plugin_id).await
+                }
+
                 pub async fn initialize(mut client: StewClient<S, D>, plugin_id: PluginId) -> Result<Self, stew_rpc::Error> {
                     let mut functions = Vec::new();
                     #(functions.push(#client_get_fns);)*
@@ -93,18 +116,29 @@ pub fn plugin(_attrs: TokenStream, input: TokenStream) -> TokenStream {
                 #(#client_impl_fns)*
             }
 
-            pub async fn register_functions<S, D>(client: &mut StewClient<S, D>) -> Result<(), stew_rpc::Error>
-            where
-                S: StewConnectionSender<StewRpcCall> + Clone + 'static,
-                D: #trait_name + Send + Sync + 'static
-            {
-                #(#register_fns)*
-                Ok(())
+
+            pub mod server {
+                use super::*;
+                pub async fn register_functions<S, D>(client: &mut StewClient<S, D>) -> Result<(), stew_rpc::Error>
+                where
+                    S: StewConnectionSender<StewRpcCall> + Clone + 'static,
+                    D: #trait_name + Send + Sync + 'static
+                {
+                    #(#register_fns)*
+                    Ok(())
+                }
             }
         }
     }
     .into()
 }
+
+#[derive(darling::FromMeta)]
+struct PluginAttr {
+    version: Version,
+    name: syn::LitStr,
+}
+
 
 fn make_client_get_fn(function: &TraitItemMethod) -> proc_macro2::TokenStream {
     let name = &function.sig.ident;
@@ -274,6 +308,39 @@ fn make_proxy_fn(path: syn::Path, n: usize, sig: syn::TypeBareFn) -> proc_macro2
 }
 
 struct Version(Span, usize, usize);
+
+impl ToTokens for Version {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let version = format!("{}.{}", self.1, self.2);
+        let version = syn::LitStr::new(&version, self.0);
+        tokens.extend(quote!(#version))
+
+    }
+}
+
+impl darling::FromMeta for Version {
+    fn from_value(version: &syn::Lit) -> darling::Result<Self> {
+        let version = match version {
+            syn::Lit::Str(x) => x,
+            _ => abort!(version, "Version must be formatted as \"<major>.<minor>\""),
+        };
+
+        if let Some((major, minor)) = version.value().split_once('.') {
+            match (major.parse(), minor.parse()) {
+                (Ok(major), Ok(minor)) => Ok(Version(version.span(), major, minor)),
+                (Err(_), _) => {
+                    abort!(version, "Malformed major version, must be an integer")
+                },
+                (_, Err(_)) => {
+                    abort!(version, "Malformed minor version, must be an integer")
+                },
+            }
+        } else {
+            abort!(version, "Version must be formatted as <major>.<minor>.");
+        }
+    }
+}
+
 
 impl Parse for Version {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
