@@ -33,13 +33,13 @@ async fn main() -> color_eyre::Result<()> {
     tracing::info!("Copilot started");
     let plugin = Plugin { counter: 0 };
 
-    let mut stew_client = bazed_stew_interface::init_client(plugin);
-    tracing::info!("Stew client running");
+    let mut stew_session = bazed_stew_interface::init_client(plugin);
+    tracing::info!("Stew session running");
 
-    copilot_interface::server::initialize(&mut stew_client).await?;
+    copilot_interface::server::initialize(&mut stew_session).await?;
     tracing::info!("Initialized");
 
-    let mut other_plugin: CopilotClient<Plugin> = CopilotClient::load(stew_client.clone()).await?;
+    let mut other_plugin: CopilotClient = CopilotClient::load(stew_session.clone()).await?;
 
     other_plugin.plus(5).await?;
     other_plugin.plus(5).await?;

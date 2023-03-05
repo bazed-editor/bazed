@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
+use derivative::Derivative;
 use dyn_clone::DynClone;
 use futures::{channel::oneshot, future::BoxFuture};
 use semver::{Version, VersionReq};
@@ -59,20 +60,27 @@ pub type PluginFn<D> = Box<
     dyn for<'a> Fn(&'a mut D, Value) -> BoxFuture<'a, Result<Value, Value>> + Send + Sync + 'static,
 >;
 
-pub struct StewSession<D> {
+pub struct StewSessionBase {
     stew_send: Box<dyn StewConnectionSender<StewRpcCall>>,
-    functions: Arc<DashMap<FunctionId, PluginFn<D>>>,
     invocations: Arc<DashMap<InvocationId, oneshot::Sender<InvocationResponseData>>>,
 }
 
-impl<D> Clone for StewSession<D> {
+impl Clone for StewSessionBase {
     fn clone(&self) -> Self {
         Self {
             stew_send: dyn_clone::clone_box(&*self.stew_send),
-            functions: self.functions.clone(),
             invocations: self.invocations.clone(),
         }
     }
+}
+
+#[derive(derive_more::Deref, derive_more::DerefMut, Derivative)]
+#[derivative(Clone)]
+pub struct StewSession<D> {
+    functions: Arc<DashMap<FunctionId, PluginFn<D>>>,
+    #[deref]
+    #[deref_mut]
+    base: StewSessionBase,
 }
 
 impl<D> StewSession<D>
@@ -134,31 +142,13 @@ where
                 }
             }
         });
-        Self {
-            stew_send: Box::new(stew_send),
-            functions,
-            invocations,
-        }
-    }
 
-    pub async fn load_plugin(
-        &mut self,
-        name: String,
-        version_requirement: VersionReq,
-    ) -> Result<PluginInfo, Error> {
-        let invocation_id = InvocationId::gen();
-        self.send_call(StewRpcCall::LoadPlugin {
-            name,
-            version_requirement,
-            invocation_id,
-        })
-        .await?;
-        expect_invocation_result!(
-            self.await_invocation_result(invocation_id).await?,
-            InvocationResponseData::PluginLoaded { plugin_id, version } => {
-                PluginInfo { plugin_id, version }
-            },
-        )
+        let base = StewSessionBase {
+            stew_send: Box::new(stew_send),
+            invocations,
+        };
+
+        Self { base, functions }
     }
 
     pub async fn register_fn<F>(&mut self, name: &str, function: F) -> Result<(), Error>
@@ -180,6 +170,28 @@ where
         .await?;
         Ok(())
     }
+}
+
+impl StewSessionBase {
+    pub async fn load_plugin(
+        &mut self,
+        name: String,
+        version_requirement: VersionReq,
+    ) -> Result<PluginInfo, Error> {
+        let invocation_id = InvocationId::gen();
+        self.send_call(StewRpcCall::LoadPlugin {
+            name,
+            version_requirement,
+            invocation_id,
+        })
+        .await?;
+        expect_invocation_result!(
+            self.await_invocation_result(invocation_id).await?,
+            InvocationResponseData::PluginLoaded { plugin_id, version } => {
+                PluginInfo { plugin_id, version }
+            },
+        )
+    }
 
     pub async fn get_fn(
         &mut self,
@@ -199,30 +211,14 @@ where
         )
     }
 
+    #[tracing::instrument(skip(self, args))]
     pub async fn call_fn_ignore_response<T: Serialize>(
         &mut self,
         fn_id: FunctionId,
         args: T,
     ) -> Result<(), Error> {
-        self.send_call(StewRpcCall::CallFunction {
-            fn_id,
-            args: serde_json::to_value(args).unwrap(),
-            invocation_id: None,
-        })
-        .await?;
+        self.send_call_fn_call(fn_id, args, None).await?;
         Ok(())
-    }
-
-    #[tracing::instrument(skip(self, args))]
-    pub async fn call_fn_and_await_response_infallible<O: DeserializeOwned>(
-        &mut self,
-        fn_id: FunctionId,
-        args: impl Serialize,
-    ) -> Result<O, Error> {
-        match self.call_fn_and_await_response(fn_id, args).await? {
-            Ok(result) => Ok(result),
-            Err(err) => Err(Error::InfallibleFunctionFailed(err)),
-        }
     }
 
     #[tracing::instrument(skip(self, args))]
@@ -232,12 +228,8 @@ where
         args: impl Serialize,
     ) -> Result<Result<O, E>, Error> {
         let invocation_id = InvocationId::gen();
-        self.send_call(StewRpcCall::CallFunction {
-            fn_id,
-            args: serde_json::to_value(args).unwrap(),
-            invocation_id: Some(invocation_id),
-        })
-        .await?;
+        self.send_call_fn_call(fn_id, args, Some(invocation_id))
+            .await?;
         let result = expect_invocation_result!(
             self.await_invocation_result(invocation_id).await?,
             InvocationResponseData::FunctionReturned(result) => result,
@@ -270,6 +262,20 @@ where
             .send_to_stew(msg)
             .await
             .map_err(|x| Error::Connection(Box::new(x)))
+    }
+
+    async fn send_call_fn_call<T: Serialize>(
+        &mut self,
+        fn_id: FunctionId,
+        args: T,
+        invocation_id: Option<InvocationId>,
+    ) -> Result<(), Error> {
+        self.send_call(StewRpcCall::CallFunction {
+            fn_id,
+            args: serde_json::to_value(args).unwrap(),
+            invocation_id,
+        })
+        .await
     }
 }
 

@@ -35,6 +35,7 @@ parking_lot = "0.12.1"
 async-trait = "0.1.64"
 semver = {version = "1.0.16", features = ["serde"]}
 interprocess = { version = "1.2.1", default-features = false, features = ["tokio_support"] }
+derivative = "2.2.0"
 
 futures = { version = "0.3.25", default-features = false, features = ["std"] }
 tokio = { version = "1.24.1", features = ["rt-multi-thread", "net", "macros", "time", "sync"] }
