@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
+use dyn_clone::DynClone;
 use futures::{channel::oneshot, future::BoxFuture};
 use semver::{Version, VersionReq};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -23,12 +24,13 @@ macro_rules! expect_invocation_result {
 }
 
 #[async_trait::async_trait]
-pub trait StewConnectionSender<T>: Send + Sync + 'static
+pub trait StewConnectionSender<T>: DynClone + Send + Sync + 'static
 where
     T: Serialize + Send + Sync + 'static,
 {
     async fn send_to_stew(&mut self, msg: T) -> Result<(), Error>;
 }
+
 #[async_trait::async_trait]
 pub trait StewConnectionReceiver<T>: Send + Sync + 'static
 where
@@ -57,38 +59,37 @@ pub type PluginFn<D> = Box<
     dyn for<'a> Fn(&'a mut D, Value) -> BoxFuture<'a, Result<Value, Value>> + Send + Sync + 'static,
 >;
 
-pub struct StewClient<S, D> {
-    stew_send: S,
+pub struct StewSession<D> {
+    stew_send: Box<dyn StewConnectionSender<StewRpcCall>>,
     functions: Arc<DashMap<FunctionId, PluginFn<D>>>,
     invocations: Arc<DashMap<InvocationId, oneshot::Sender<InvocationResponseData>>>,
 }
 
-impl<S: Clone, D> Clone for StewClient<S, D> {
+impl<D> Clone for StewSession<D> {
     fn clone(&self) -> Self {
         Self {
-            stew_send: self.stew_send.clone(),
+            stew_send: dyn_clone::clone_box(&*self.stew_send),
             functions: self.functions.clone(),
             invocations: self.invocations.clone(),
         }
     }
 }
 
-impl<S, D> StewClient<S, D>
+impl<D> StewSession<D>
 where
-    S: StewConnectionSender<StewRpcCall> + Clone,
     D: Send + Sync + 'static,
 {
-    pub fn start<R: StewConnectionReceiver<StewRpcMessage>>(
-        stew_send: S,
-        mut stew_recv: R,
-        mut userdata: D,
-    ) -> Self {
+    pub fn start<S, R>(stew_send: S, mut stew_recv: R, mut userdata: D) -> Self
+    where
+        S: StewConnectionSender<StewRpcCall>,
+        R: StewConnectionReceiver<StewRpcMessage>,
+    {
         let invocations = Arc::new(DashMap::<_, oneshot::Sender<_>>::new());
         let functions = Arc::new(DashMap::new());
         tokio::spawn({
             let invocations = invocations.clone();
             let functions = functions.clone();
-            let mut stew_send = stew_send.clone();
+            let mut stew_send = dyn_clone::clone_box(&stew_send);
             async move {
                 loop {
                     match stew_recv.recv_from_stew().await {
@@ -134,7 +135,7 @@ where
             }
         });
         Self {
-            stew_send,
+            stew_send: Box::new(stew_send),
             functions,
             invocations,
         }
