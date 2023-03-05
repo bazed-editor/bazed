@@ -48,7 +48,7 @@ pub fn plugin(attrs: TokenStream, input: TokenStream) -> TokenStream {
         mod __internal {
             use super::*;
             use bazed_stew_interface::{
-                stew_rpc::{self, StewConnectionSender, StewConnectionReceiver, StewSession},
+                stew_rpc::{self, StewConnectionSender, StewConnectionReceiver, StewSession, StewSessionBase},
                 rpc_proto::{StewRpcCall, StewRpcMessage, FunctionId, PluginId, PluginMetadata},
                 semver,
             };
@@ -118,28 +118,25 @@ fn make_client_impl(
     });
 
     quote! {
-        pub struct #client_impl_name<D> {
-            client: StewSession<D>,
+        pub struct #client_impl_name {
+            client: StewSessionBase,
             functions: Vec<FunctionId>,
         }
 
-        impl <D> #client_impl_name<D>
-        where
-            D: Send + Sync + 'static
-        {
-            pub async fn load(mut client: StewSession<D>) -> Result<Self, stew_rpc::Error> {
+        impl  #client_impl_name {
+            pub async fn load(mut client: StewSessionBase) -> Result<Self, stew_rpc::Error> {
                 Self::load_at(client, #plugin_version.parse().unwrap())
                     .await
             }
 
-            pub async fn load_at(mut client: StewSession<D>, version: semver::VersionReq) -> Result<Self, stew_rpc::Error> {
+            pub async fn load_at(mut client: StewSessionBase, version: semver::VersionReq) -> Result<Self, stew_rpc::Error> {
                 let plugin_info = client
                     .load_plugin(#plugin_name.to_string(), version)
                     .await?;
                 Self::initialize(client, plugin_info.plugin_id).await
             }
 
-            pub async fn initialize(mut client: StewSession<D>, plugin_id: PluginId) -> Result<Self, stew_rpc::Error> {
+            pub async fn initialize(mut client: StewSessionBase, plugin_id: PluginId) -> Result<Self, stew_rpc::Error> {
                 let functions = vec![ #(#client_get_fns),* ];
                 Ok(Self { client, functions })
             }
@@ -174,6 +171,7 @@ struct PluginAttr {
 fn make_client_impl_fn(n: usize, mut function: TraitItemMethod) -> proc_macro2::TokenStream {
     // we have to get this before changing the signature
     let returns_result = returns_result(&function.sig);
+    let returns_nothing = returns_nothing(&function.sig);
 
     function.sig = wrap_return_type(
         function.sig,
@@ -195,10 +193,17 @@ fn make_client_impl_fn(n: usize, mut function: TraitItemMethod) -> proc_macro2::
 
     let function_sig = &function.sig;
 
-    let call_fn_line = if returns_result {
+    let call_fn_line = if returns_nothing {
+        quote! { self.client.call_fn_ignore_response(self.functions[#n], args).await }
+    } else if returns_result {
         quote! { self.client.call_fn_and_await_response(self.functions[#n], args).await }
     } else {
-        quote! { self.client.call_fn_and_await_response_infallible(self.functions[#n], args).await }
+        quote! {
+            match self.client.call_fn_and_await_response(self.functions[#n], args).await? {
+                Ok(result) => Ok(result),
+                Err(err) => Err(::bazed_stew_interface::stew_rpc::Error::InfallibleFunctionFailed(err)),
+            }
+        }
     };
 
     let attrs = &function.attrs;
@@ -211,6 +216,19 @@ fn make_client_impl_fn(n: usize, mut function: TraitItemMethod) -> proc_macro2::
             let args = Args { #(#arg_names),* };
             #call_fn_line
         }
+    }
+}
+
+fn returns_nothing(sig: &syn::Signature) -> bool {
+    match &sig.output {
+        syn::ReturnType::Default => true,
+        syn::ReturnType::Type(_, ty) => match &**ty {
+            syn::Type::Path(p) => {
+                let path = &p.path;
+                path.segments.len() == 1 && path.segments[0].ident == "()"
+            },
+            _ => false,
+        },
     }
 }
 
