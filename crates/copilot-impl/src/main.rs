@@ -9,7 +9,11 @@ struct Plugin;
 
 #[async_trait::async_trait]
 impl copilot_interface::Copilot for Plugin {
-    async fn hello(&mut self, name: String) -> Result<Result<String, ()>, stew_rpc::Error> {
+    async fn hello(&mut self, name: String) -> Result<String, stew_rpc::Error> {
+        tracing::info!("from plugin: Hello, {name}!");
+        Ok(format!("Hello, {name}!"))
+    }
+    async fn try_hello(&mut self, name: String) -> Result<Result<String, usize>, stew_rpc::Error> {
         tracing::info!("from plugin: Hello, {name}!");
         Ok(Ok(format!("Hello, {name}!")))
     }
@@ -34,9 +38,10 @@ async fn main() {
         .await
         .unwrap();
 
-    let result = copilot.hello("foo".to_string()).await.unwrap().unwrap();
-
-    tracing::info!("Result: {result:?}");
+    let result = copilot.hello("foo".to_string()).await.unwrap();
+    tracing::info!("Result hello: {result:?}");
+    let result = copilot.try_hello("foo".to_string()).await.unwrap().unwrap();
+    tracing::info!("Result try_hello: {result:?}");
 
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
