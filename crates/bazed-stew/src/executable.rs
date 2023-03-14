@@ -44,7 +44,7 @@ impl PluginExecutable {
             .ok_or_else(|| Error::MalformedName(file_name.clone()))?;
         Ok(Self {
             name: name.to_string(),
-            version: Version::parse(&version)?,
+            version: Version::parse(version)?,
             path,
         })
     }
@@ -60,7 +60,6 @@ impl PluginExecutable {
     pub(crate) fn version_matches(&self, version_requirement: &VersionReq) -> bool {
         version_requirement.matches(&self.version)
     }
-
 }
 
 pub fn search_plugins_in(path: &Path) -> impl Iterator<Item = PluginExecutable> {
