@@ -56,7 +56,7 @@ impl Stew {
         let (to_stew_write, to_stew_read) = interprocess::unnamed_pipe::pipe().unwrap();
         let (to_plugin_write, to_plugin_read) = interprocess::unnamed_pipe::pipe().unwrap();
         let plugin_id = PluginId(Uuid::new_v4());
-        Command::new(plugin.path())
+        Command::new(&plugin.path)
             .arg(to_stew_write.as_raw_fd().to_string())
             .arg(to_plugin_read.as_raw_fd().to_string())
             .arg(plugin_id.0.to_string())
@@ -218,7 +218,7 @@ impl Stew {
                         invocation_id,
                         InvocationResponseData::PluginLoaded {
                             plugin_id,
-                            version: found.version(),
+                            version: found.version,
                         },
                     )
                     .await;
