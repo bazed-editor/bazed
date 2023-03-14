@@ -1,20 +1,18 @@
-use copilot_interface::CopilotClient;
+use example_plugin_interface::ExamplePluginClient;
 use tracing_error::ErrorLayer;
-use tracing_subscriber::{
-    prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
-};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 struct Plugin {
     counter: usize,
 }
 
 #[async_trait::async_trait]
-impl copilot_interface::Copilot for Plugin {
-    async fn plus(&mut self, n: usize) {
+impl example_plugin_interface::ExamplePlugin for Plugin {
+    async fn increase(&mut self, n: usize) {
         self.counter += n;
     }
 
-    async fn minus(&mut self, n: usize) -> Result<(), String> {
+    async fn decrease(&mut self, n: usize) -> Result<(), String> {
         if self.counter < n {
             Err("Can't subtract more than the current value".to_string())
         } else {
@@ -22,6 +20,7 @@ impl copilot_interface::Copilot for Plugin {
             Ok(())
         }
     }
+
     async fn value(&mut self) -> usize {
         self.counter
     }
@@ -30,22 +29,24 @@ impl copilot_interface::Copilot for Plugin {
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     init_logging();
-    tracing::info!("Copilot started");
+    tracing::info!("Example plugin started");
     let plugin = Plugin { counter: 0 };
     let mut stew_session = bazed_stew_interface::init_session_with_state(plugin);
     tracing::info!("Stew session running");
 
-    copilot_interface::server::initialize(&mut stew_session).await?;
+    example_plugin_interface::server::initialize(&mut stew_session).await?;
     tracing::info!("Initialized");
 
-    let mut other_plugin = CopilotClient::load(stew_session.clone()).await?;
+    let mut other_plugin = ExamplePluginClient::load(stew_session.clone()).await?;
 
-    other_plugin.plus(5).await?;
-    other_plugin.plus(5).await?;
+    other_plugin.increase(5).await?;
+    other_plugin.increase(5).await?;
     let result = other_plugin.value().await?;
+    assert_eq!(result, 10);
     tracing::info!("Result value: {result:?}");
-    let result = other_plugin.minus(15).await?;
+    let result = other_plugin.decrease(15).await?;
     tracing::info!("Result minus: {result:?}");
+    assert!(result.is_err());
 
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;

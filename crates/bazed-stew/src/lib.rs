@@ -28,11 +28,11 @@ pub async fn run_stew(load_path: Vec<PathBuf>) {
         plugins: Arc::new(DashMap::new()),
         rpc_call_send,
     };
-    let copilot = search_plugin(&load_path, "copilot", &"*".parse().unwrap());
-    if let Some(copilot) = copilot {
-        stew.start_plugin(&copilot).await;
+    let example_plugin = search_plugin(&load_path, "example-plugin", &"*".parse().unwrap());
+    if let Some(example_plugin) = example_plugin {
+        stew.start_plugin(&example_plugin).await;
     } else {
-        tracing::error!("Failed to find copilot plugin");
+        tracing::error!("Failed to find example plugin");
     }
     tracing::info!("Starting to listen to rpc calls");
 
