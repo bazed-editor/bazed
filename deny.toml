@@ -7,7 +7,8 @@ vulnerability = "deny"
 yanked = "deny"
 ignore = [
     "RUSTSEC-2022-0048", # xml-rs
-    "RUSTSEC-2023-0018" # tauri -> remove_dir_all
+    "RUSTSEC-2023-0018", # tauri -> remove_dir_all
+    "RUSTSEC-2023-0019" # kuchiki unmaintained
 ]
 
 [licenses]
@@ -30,9 +31,13 @@ multiple-versions = "deny"
 wildcards = "deny"
 skip = [
     { name = "cfg-expr", version = "0.9.1" }, # https://github.com/tauri-apps/webkit2gtk-rs/pull/134
+    { name = "darling", version = "0.13.4" },
+    { name = "darling_core", version = "0.13.4" },
+    { name = "darling_macro", version = "0.13.4" },
     { name = "getrandom", version = "0.1.16" }, # fixed with next kuchiki release
     { name = "heck", version = "0.3.3" }, # https://github.com/tauri-apps/webkit2gtk-rs/pull/134
     { name = "itoa", version = "0.4.8" }, # blocked by kuchiki (cssparser 0.29)
+    { name = "kuchiki", version = "0.8.1" },
     { name = "phf", version = "0.8.0" }, # fixed with next kuchiki release
     { name = "phf_generator", version = "0.8.0" }, # fixed with next kuchiki release
     { name = "phf_macros", version = "0.8.0" }, # fixed with next kuchiki release
