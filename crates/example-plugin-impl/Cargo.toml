@@ -1,7 +1,8 @@
 [package]
-name = "copilot-interface"
+name = "example-plugin-impl"
 version = "0.0.0"
 edition = "2021"
+description = "A basic example of a plugin implementation"
 authors.workspace = true
 categories.workspace = true
 keywords.workspace = true
@@ -10,13 +11,15 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
-bazed-stew-macros.workspace = true
+
+async-trait.workspace = true
 bazed-stew-interface.workspace = true
 tracing.workspace = true
 interprocess.workspace = true
 serde_json.workspace = true
-serde.workspace = true
 tokio.workspace = true
 tracing-subscriber.workspace = true
 tracing-error.workspace = true
-async-trait.workspace = true
+
+example-plugin-interface.workspace = true
+color-eyre.workspace = true

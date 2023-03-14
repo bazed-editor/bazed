@@ -23,7 +23,7 @@ impl PluginExecutable {
             return None;
         }
         let file_name = path.file_name()?.to_string_lossy();
-        let version = file_name.split('=').nth(1)?.to_string();
+        let version = file_name.split('@').nth(1)?.to_string();
         Version::parse(&version).is_ok().then_some(Self(path))
     }
 
@@ -33,12 +33,12 @@ impl PluginExecutable {
 
     pub fn name(&self) -> String {
         let file_name = self.0.file_name().unwrap().to_string_lossy();
-        file_name.split('=').next().unwrap().to_string()
+        file_name.split('@').next().unwrap().to_string()
     }
 
     pub fn version(&self) -> Version {
         let file_name = self.0.file_name().unwrap().to_string_lossy();
-        let version = file_name.split('=').nth(1).unwrap().to_string();
+        let version = file_name.split('@').nth(1).unwrap().to_string();
         Version::parse(&version).unwrap()
     }
 

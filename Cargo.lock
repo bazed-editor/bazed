@@ -533,38 +533,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
-name = "copilot-impl"
-version = "0.0.0"
-dependencies = [
- "async-trait",
- "bazed-stew-interface",
- "color-eyre",
- "copilot-interface",
- "interprocess",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-error",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "copilot-interface"
-version = "0.0.0"
-dependencies = [
- "async-trait",
- "bazed-stew-interface",
- "bazed-stew-macros",
- "interprocess",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-error",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -857,6 +825,38 @@ name = "event-listener"
 version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
+
+[[package]]
+name = "example-plugin-impl"
+version = "0.0.0"
+dependencies = [
+ "async-trait",
+ "bazed-stew-interface",
+ "color-eyre",
+ "example-plugin-interface",
+ "interprocess",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-error",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "example-plugin-interface"
+version = "0.0.0"
+dependencies = [
+ "async-trait",
+ "bazed-stew-interface",
+ "bazed-stew-macros",
+ "interprocess",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-error",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "eyre"
