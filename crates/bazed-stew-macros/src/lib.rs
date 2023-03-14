@@ -52,7 +52,7 @@ pub fn plugin(attrs: TokenStream, input: TokenStream) -> TokenStream {
         pub use #internal_ident::#client_impl_name;
         mod #internal_ident {
             use super::*;
-            use bazed_stew_interface::{
+            use ::bazed_stew_interface::{
                 stew_rpc::{self, StewConnectionSender, StewConnectionReceiver, StewSession, StewSessionBase},
                 rpc_proto::{StewRpcCall, StewRpcMessage, FunctionId, PluginId, PluginMetadata},
                 re_exports
